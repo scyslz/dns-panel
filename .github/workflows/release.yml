@@ -1,80 +1,61 @@
-name: Build Docker Image and Upload to Release
+name: Build Multi-Arch Docker and Upload to Release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. v1.0.0)"
+        description: "Release version (e.g., v1.0.0)"
         required: true
         default: "v1.0.0"
+
+permissions:
+  contents: write  # 创建 Release 需要
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ 拉取代码
       - uses: actions/checkout@v4
 
+      # 2️⃣ 设置 QEMU（跨架构支持）
       - uses: docker/setup-qemu-action@v3
+
+      # 3️⃣ 设置 Buildx
       - uses: docker/setup-buildx-action@v3
 
-      # =========================
-      # Build amd64
-      # =========================
-      - name: Build amd64
+      # 4️⃣ 构建 multi-arch 镜像并导出为 tar
+      - name: Build multi-arch Docker image
         run: |
           docker buildx build \
-            --platform linux/amd64 \
-            -t dns-panel:${{ github.event.inputs.version }}-amd64 \
-            --output type=docker \
-            .
+            --platform linux/amd64,linux/arm64 \
+            --output type=oci,dest=dns-panel.tar .
+          
+          gzip -c dns-panel.tar > dns-panel.tar.gz
 
-          docker save dns-panel:${{ github.event.inputs.version }}-amd64 \
-            | gzip > dns-panel-${{ github.event.inputs.version }}-amd64.tar.gz
-
-      # =========================
-      # Build arm64
-      # =========================
-      - name: Build arm64
-        run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            -t dns-panel:${{ github.event.inputs.version }}-arm64 \
-            --output type=docker \
-            .
-
-          docker save dns-panel:${{ github.event.inputs.version }}-arm64 \
-            | gzip > dns-panel-${{ github.event.inputs.version }}-arm64.tar.gz
-
-      # =========================
-      # Create Release (version tag)
-      # =========================
-      - name: Create Version Release
+      # 5️⃣ 创建版本 Release
+      - name: Create version release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
-          files: |
-            dns-panel-${{ github.event.inputs.version }}-amd64.tar.gz
-            dns-panel-${{ github.event.inputs.version }}-arm64.tar.gz
+          files: dns-panel.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # =========================
-      # Create / Update latest tag
-      # =========================
+      # 6️⃣ 更新 / 创建 latest tag
       - name: Update latest tag
         run: |
           git tag -f latest
           git push origin latest --force
 
-      - name: Create Latest Release
+      # 7️⃣ 创建 latest Release
+      - name: Create latest release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Latest
-          files: |
-            dns-panel-${{ github.event.inputs.version }}-amd64.tar.gz
-            dns-panel-${{ github.event.inputs.version }}-arm64.tar.gz
+          files: dns-panel.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
