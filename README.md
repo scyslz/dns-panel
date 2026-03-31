@@ -404,7 +404,7 @@ npm run dev
 | `JWT_EXPIRES_IN` | `7d` | JWT 过期时间 |
 | `LOG_RETENTION_DAYS` | `90` | 日志保留天数 |
 | `DATABASE_URL` | - | SQLite 连接串 |
-| `ACME_ENV` | `staging` | ACME 环境：`staging` / `production` |
+| `ACME_ENV` | `production`（当 `NODE_ENV=production` 且未显式设置 ACME_ENV 时），否则 `staging` | ACME 环境：`staging` / `production` |
 | `CERTIFICATE_SCHEDULER_INTERVAL_MS` | `15000` | 证书订单调度器轮询间隔 |
 | `CERTIFICATE_RENEWAL_SCHEDULER_INTERVAL_MS` | `21600000` | 自动续期调度器轮询间隔（默认 6 小时） |
 | `ACME_PROPAGATION_DELAY_MS` | `30000` | 自动写入 TXT 后的首次传播等待时间 |

@@ -22,6 +22,12 @@ export async function requestText(options: RequestOptions): Promise<RequestResul
   const transport = isHttps ? https : http;
   const timeoutMs = Math.max(1000, Number(options.timeoutMs || 8000));
 
+  const body = options.body !== undefined ? (Buffer.isBuffer(options.body) ? options.body : Buffer.from(options.body)) : undefined;
+  const headers: Record<string, string> = { ...(options.headers || {}) };
+  if (body !== undefined && !headers['Content-Length'] && !headers['content-length']) {
+    headers['Content-Length'] = String(body.length);
+  }
+
   return await new Promise<RequestResult>((resolve, reject) => {
     const req = transport.request(
       {
@@ -30,7 +36,7 @@ export async function requestText(options: RequestOptions): Promise<RequestResul
         port: url.port ? Number(url.port) : undefined,
         path: `${url.pathname}${url.search}`,
         method: options.method || 'GET',
-        headers: options.headers,
+        headers,
         rejectUnauthorized: isHttps ? !options.allowInsecureTls : undefined,
       },
       (res) => {
@@ -52,11 +58,7 @@ export async function requestText(options: RequestOptions): Promise<RequestResul
 
     req.on('error', reject);
 
-    if (options.body !== undefined) {
-      req.write(options.body);
-    }
-
-    req.end();
+    req.end(body);
   });
 }
 

@@ -4,6 +4,11 @@ import path from 'path';
 // 加载环境变量
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
+const resolvedNodeEnv = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
+const defaultAcmeEnv = resolvedNodeEnv === 'production' ? 'production' : 'staging';
+const resolvedAcmeEnv = (String(process.env.ACME_ENV || defaultAcmeEnv).trim().toLowerCase() === 'production' ? 'production' : 'staging') as 'staging' | 'production';
+
+
 export const config = {
   // 环境配置
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -23,7 +28,7 @@ export const config = {
 
   // ACME 配置
   acme: {
-    env: (String(process.env.ACME_ENV || 'staging').toLowerCase() === 'production' ? 'production' : 'staging') as 'staging' | 'production',
+    env: resolvedAcmeEnv,
     schedulerIntervalMs: Math.max(5000, parseInt(process.env.CERTIFICATE_SCHEDULER_INTERVAL_MS || '15000', 10) || 15000),
     renewalSchedulerIntervalMs: Math.max(60000, parseInt(process.env.CERTIFICATE_RENEWAL_SCHEDULER_INTERVAL_MS || '21600000', 10) || 21600000),
     propagationDelayMs: Math.max(5000, parseInt(process.env.ACME_PROPAGATION_DELAY_MS || '30000', 10) || 30000),
