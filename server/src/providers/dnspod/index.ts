@@ -256,10 +256,11 @@ export class DnspodProvider extends BaseProvider {
 
   constructor(credentials: ProviderCredentials) {
     const { secretId, secretKey, tokenId, token } = credentials.secrets || {};
+    const hasTc3Pair = Boolean(secretId && secretKey);
+
     const hasLegacyPair = Boolean(tokenId && token);
-    const hasLegacyCombined = Boolean(!hasLegacyPair && token && String(token).includes(','));
-    const useLegacy = hasLegacyPair || hasLegacyCombined;
-    const hasTc3 = Boolean(secretId && secretKey);
+    const hasLegacyCombined = Boolean(token && String(token).includes(','));
+    const useLegacy = !hasTc3Pair && (hasLegacyPair || hasLegacyCombined);
 
     super(credentials, useLegacy ? { ...DNSPOD_CAPABILITIES, recordTypes: [...DNSPOD_TOKEN_CAPABILITIES.recordTypes] } : DNSPOD_CAPABILITIES);
 
@@ -274,7 +275,7 @@ export class DnspodProvider extends BaseProvider {
       return;
     }
 
-    if (!hasTc3) {
+    if (!hasTc3Pair) {
       throw this.createError('MISSING_CREDENTIALS', '缺少 DNSPod SecretId/SecretKey 或 DNSPod Token（Token ID + Token）');
     }
 

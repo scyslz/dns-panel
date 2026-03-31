@@ -57,6 +57,11 @@ function nextRetryDate(retryCount: number): Date {
   return new Date(Date.now() + ms);
 }
 
+function isInvalidAcmeAccountUrlError(message: string): boolean {
+  const msg = String(message || '').toLowerCase();
+  return msg.includes('invalid account url');
+}
+
 function mapOrderRecord(record: any) {
   const domains = parseJson<string[]>(record.domainsJson, []);
   const challengeState = parseJson<CertificateOrderState | null>(record.challengeRecordsJson, null);
@@ -252,6 +257,39 @@ export class CertificateOrderService {
     return mapOrderRecord(updated);
   }
 
+  static async deleteOrder(userId: number, orderId: number) {
+    const record = await prisma.certificateOrder.findFirst({
+      where: { id: orderId, userId },
+      include: {
+        _count: { select: { deployJobs: true } },
+      },
+    });
+    if (!record) throw new Error('证书订单不存在');
+
+    const deployJobsCount = Number(record?._count?.deployJobs || 0);
+    if (deployJobsCount > 0) {
+      throw new Error('该订单已绑定部署任务，无法删除，请先删除/解绑部署任务');
+    }
+
+    const orderState = parseJson<CertificateOrderState | null>(record.challengeRecordsJson, null);
+    if (orderState?.challenges?.length) {
+      await CertificateDnsService.cleanupChallengeRecords(record.userId, record.dnsCredentialId, orderState.challenges).catch(() => undefined);
+    }
+
+    await prisma.certificateOrder.delete({ where: { id: record.id } });
+
+    await createLog({
+      userId,
+      action: 'DELETE',
+      resourceType: 'CERTIFICATE',
+      domain: record.primaryDomain,
+      recordName: 'order:delete',
+      status: 'SUCCESS',
+    });
+
+    return { deleted: true };
+  }
+
   static async setAutoRenew(userId: number, orderId: number, enabled: boolean) {
     const record = await getOrderForUser(userId, orderId);
     const orderState = parseJson<CertificateOrderState | null>(record.challengeRecordsJson, null);
@@ -331,11 +369,13 @@ export class CertificateOrderService {
     const credential = await getCredentialSecrets(record.certificateCredentialId, record.userId);
 
     if (record.status === 'queued') {
+      const existingPrivateKeyPem = record.privateKeyPem ? decrypt(record.privateKeyPem) : null;
+
       try {
         const created = await AcmeService.createOrderState({
           ...credential,
           domains,
-          existingPrivateKeyPem: record.privateKeyPem ? decrypt(record.privateKeyPem) : null,
+          existingPrivateKeyPem,
         });
 
         await prisma.certificateOrder.update({
@@ -357,6 +397,66 @@ export class CertificateOrderService {
         return this.processOrder(record.id);
       } catch (error: any) {
         const message = error?.message || 'ACME 订单创建失败';
+
+        // 兼容：环境从 staging 切换到 production 后，旧的 accountUrl 会导致 JWS KeyID 校验失败
+        if (credential.accountUrl && isInvalidAcmeAccountUrlError(message)) {
+          try {
+            const provisioned = await AcmeService.validateAndProvisionCredential({
+              ...credential,
+              accountUrl: null,
+            });
+
+            await prisma.certificateCredential.update({
+              where: { id: record.certificateCredentialId },
+              data: {
+                accountKeyPem: encrypt(provisioned.accountKeyPem),
+                accountUrl: provisioned.accountUrl,
+                directoryUrl: provisioned.directoryUrl,
+              },
+            });
+
+            const recreated = await AcmeService.createOrderState({
+              ...credential,
+              accountKeyPem: provisioned.accountKeyPem,
+              accountUrl: provisioned.accountUrl,
+              directoryUrl: provisioned.directoryUrl,
+              domains,
+              existingPrivateKeyPem,
+            });
+
+            await prisma.certificateOrder.update({
+              where: { id: record.id },
+              data: {
+                status: 'pending_dns',
+                challengeRecordsJson: serializeChallenges({ ...recreated.orderState, workflow: 'issue', phase: 'pending_dns' }),
+                privateKeyPem: encrypt(recreated.privateKeyPem),
+                nextRetryAt: new Date(),
+                lastError: null,
+              },
+            });
+
+            await prisma.certificateCredential.update({
+              where: { id: record.certificateCredentialId },
+              data: { accountUrl: recreated.accountUrl, directoryUrl: recreated.directoryUrl },
+            });
+            await createOrderLog(record.userId, record.primaryDomain, 'issue:challenge-created', 'SUCCESS');
+            return this.processOrder(record.id);
+          } catch (repairError: any) {
+            const repairMessage = repairError?.message ? `ACME 账户重建失败: ${repairError.message}` : message;
+            await prisma.certificateOrder.update({
+              where: { id: record.id },
+              data: {
+                status: 'failed',
+                nextRetryAt: null,
+                lastError: repairMessage,
+              },
+            });
+            await createOrderLog(record.userId, record.primaryDomain, 'issue:failed:create-order', 'FAILED', repairMessage);
+            await notifyIssueFailure(record.userId, record.primaryDomain, domains, credential.provider, repairMessage);
+            return;
+          }
+        }
+
         await prisma.certificateOrder.update({
           where: { id: record.id },
           data: {

@@ -38,17 +38,21 @@ export default function CertificateOrderDetailDialog({
   order,
   retrying,
   downloading,
+  deleting,
   onClose,
   onRetry,
   onDownload,
+  onDelete,
 }: {
   open: boolean;
   order: CertificateOrder | null;
   retrying: boolean;
   downloading: boolean;
+  deleting: boolean;
   onClose: () => void;
   onRetry?: (order: CertificateOrder) => void;
   onDownload?: (order: CertificateOrder) => void;
+  onDelete?: (order: CertificateOrder) => void;
 }) {
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<CertificateTimelineEntry[]>([]);
@@ -227,6 +231,21 @@ export default function CertificateOrderDetailDialog({
         <Button onClick={onClose} color="inherit">
           关闭
         </Button>
+        {onDelete ? (
+          (order.deployJobsCount || 0) > 0 ? (
+            <Tooltip title="该订单已绑定部署任务，无法删除">
+              <span>
+                <Button color="error" disabled>
+                  删除
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Button color="error" onClick={() => onDelete(order)} disabled={deleting}>
+              {deleting ? '删除中...' : '删除'}
+            </Button>
+          )
+        ) : null}
         {order.canRetry && onRetry ? (
           <Button variant="outlined" onClick={() => onRetry(order)} disabled={retrying}>
             {retrying ? '处理中...' : retryLabel}

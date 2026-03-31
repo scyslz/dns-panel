@@ -4,6 +4,7 @@ import { Add as AddIcon, Description as DraftIcon, Refresh as RefreshIcon } from
 import { useProvider } from '@/contexts/ProviderContext';
 import {
   createCertificateOrder,
+  deleteCertificateOrder,
   downloadCertificateOrder,
   getCertificateCredentials,
   getCertificateOrders,
@@ -30,6 +31,7 @@ export default function CertificateOrderSection() {
   const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [togglingAutoRenewId, setTogglingAutoRenewId] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
 
@@ -116,6 +118,28 @@ export default function CertificateOrderSection() {
     }
   };
 
+  const handleDelete = async (order: CertificateOrder) => {
+    if ((order.deployJobsCount || 0) > 0) {
+      setError('该订单已绑定部署任务，无法删除，请先删除/解绑部署任务');
+      return;
+    }
+
+    const confirmed = window.confirm(`确定删除证书订单 #${order.id}（${order.primaryDomain}）吗？此操作不可恢复。`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(order.id);
+      setError(null);
+      await deleteCertificateOrder(order.id);
+      if (detailOrderId === order.id) setDetailOrderId(null);
+      await loadData();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : (err?.message || '删除证书订单失败'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleToggleAutoRenew = async (order: CertificateOrder, enabled: boolean) => {
     try {
       setTogglingAutoRenewId(order.id);
@@ -179,12 +203,14 @@ export default function CertificateOrderSection() {
           error={null}
           retryingId={retryingId}
           downloadingId={downloadingId}
+          deletingId={deletingId}
           togglingAutoRenewId={togglingAutoRenewId}
           emptyTitle={normalizedSearch ? '未找到匹配的证书订单' : '暂无证书订单'}
           emptyDescription={normalizedSearch ? '试试更换域名、账户名或 DNS 关键词。' : '可以先创建并申请，或先保存一份草稿。'}
           onView={(order) => setDetailOrderId(order.id)}
           onRetry={handleRetry}
           onDownload={handleDownload}
+          onDelete={handleDelete}
           onToggleAutoRenew={handleToggleAutoRenew}
         />
       </Stack>
@@ -208,9 +234,11 @@ export default function CertificateOrderSection() {
         order={detailOrder}
         retrying={retryingId === detailOrder?.id}
         downloading={downloadingId === detailOrder?.id}
+        deleting={deletingId === detailOrder?.id}
         onClose={() => setDetailOrderId(null)}
         onRetry={handleRetry}
         onDownload={handleDownload}
+        onDelete={handleDelete}
       />
     </>
   );

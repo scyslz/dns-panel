@@ -53,12 +53,14 @@ export default function CertificateTable({
   error,
   retryingId,
   downloadingId,
+  deletingId,
   togglingAutoRenewId,
   emptyTitle,
   emptyDescription,
   onView,
   onRetry,
   onDownload,
+  onDelete,
   onToggleAutoRenew,
 }: {
   orders: CertificateOrder[];
@@ -66,12 +68,14 @@ export default function CertificateTable({
   error: string | null;
   retryingId: number | null;
   downloadingId: number | null;
+  deletingId: number | null;
   togglingAutoRenewId: number | null;
   emptyTitle?: string;
   emptyDescription?: string;
   onView: (order: CertificateOrder) => void;
   onRetry: (order: CertificateOrder) => void;
   onDownload: (order: CertificateOrder) => void;
+  onDelete: (order: CertificateOrder) => void;
   onToggleAutoRenew: (order: CertificateOrder, enabled: boolean) => void;
 }) {
   if (loading) {
@@ -119,6 +123,24 @@ export default function CertificateTable({
         <TableBody>
           {orders.map((order) => {
             const retryLabel = getRetryActionLabel(order.status);
+            const hasDeployJobs = (order.deployJobsCount || 0) > 0;
+
+            const deleteAction = (
+              <Button
+                size="small"
+                color="error"
+                onClick={() => onDelete(order)}
+                disabled={deletingId === order.id || hasDeployJobs}
+              >
+                {deletingId === order.id ? '删除中...' : '删除'}
+              </Button>
+            );
+
+            const deleteActionWithTooltip = hasDeployJobs ? (
+              <Tooltip title="该订单已绑定部署任务，无法删除">
+                <span>{deleteAction}</span>
+              </Tooltip>
+            ) : deleteAction;
 
             return (
               <TableRow
@@ -185,7 +207,7 @@ export default function CertificateTable({
                   className="certificate-order-sticky-action"
                   sx={{
                     ...stickyBodyCellSx,
-                    minWidth: 220,
+                    minWidth: 280,
                   }}
                 >
                   <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="nowrap" sx={{ whiteSpace: 'nowrap' }}>
@@ -212,6 +234,7 @@ export default function CertificateTable({
                         {downloadingId === order.id ? '下载中...' : '下载证书'}
                       </Button>
                     ) : null}
+                    {deleteActionWithTooltip}
                   </Stack>
                 </TableCell>
               </TableRow>

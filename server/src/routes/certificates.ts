@@ -82,6 +82,18 @@ router.post('/:id/auto-renew', async (req: AuthRequest, res) => {
   }
 });
 
+
+router.delete('/:id', async (req: AuthRequest, res) => {
+  try {
+    const orderId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(orderId)) return errorResponse(res, '无效的订单 ID', 400);
+    const result = await CertificateOrderService.deleteOrder(req.user!.id, orderId);
+    return successResponse(res, result, '证书订单已删除');
+  } catch (error: any) {
+    return errorResponse(res, error?.message || '删除证书订单失败', 400);
+  }
+});
+
 router.get('/:id/download', async (req: AuthRequest, res) => {
   try {
     const orderId = parseInt(req.params.id, 10);

@@ -355,11 +355,17 @@ export default function DnsCredentialManagement() {
         const tokenId = secretsToSubmit.tokenId;
         const token = secretsToSubmit.token;
 
+        const tokenHasComma = Boolean(token && String(token).includes(','));
+        if (tokenHasComma && tokenId) {
+          // 兼容：用户把 "ID,Token" 填进 Token 字段，又同时填了 ID 字段
+          delete secretsToSubmit.tokenId;
+        }
+
         const hasTc3Any = Boolean(secretId || secretKey);
         const hasTc3Pair = Boolean(secretId && secretKey);
         const hasLegacyAny = Boolean(tokenId || token);
-        const hasLegacyPair = Boolean(tokenId && token);
-        const hasLegacyCombined = Boolean(!hasLegacyPair && !tokenId && token && String(token).includes(','));
+        const hasLegacyPair = Boolean(tokenId && token && !tokenHasComma);
+        const hasLegacyCombined = Boolean(tokenHasComma);
         const hasLegacyValid = hasLegacyPair || hasLegacyCombined;
 
         if (!editingCredential) {
