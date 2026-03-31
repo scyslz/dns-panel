@@ -7,6 +7,8 @@ import { authenticateToken } from '../middleware/auth';
 import { loginLimiter } from '../middleware/rateLimit';
 import { getClientIp } from '../middleware/logger';
 import { AuthRequest } from '../types';
+import { CertificateSettingsService } from '../services/cert/CertificateSettingsService';
+import { CertificateNotificationService } from '../services/cert/CertificateNotificationService';
 
 const router = Router();
 
@@ -225,9 +227,69 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
   }
 });
 
+
+router.get('/certificate-settings', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const settings = await CertificateSettingsService.getSettings(req.user!.id);
+    return successResponse(res, { settings }, '获取证书设置成功');
+  } catch (error: any) {
+    return errorResponse(res, error?.message || '获取证书设置失败', 400);
+  }
+});
+
+router.put('/certificate-settings', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const settings = await CertificateSettingsService.updateSettings(req.user!.id, req.body || {});
+
+    await LoggerService.createLog({
+      userId: req.user!.id,
+      action: 'UPDATE',
+      resourceType: 'USER',
+      recordName: req.user?.username,
+      status: 'SUCCESS',
+      ipAddress: getClientIp(req),
+      newValue: JSON.stringify({
+        action: 'certificate_settings',
+        automation: settings.automation,
+        notifications: {
+          certificate: settings.notifications.certificate,
+          deployment: settings.notifications.deployment,
+          vendor: settings.notifications.vendor,
+          manualRenewExpiry: settings.notifications.manualRenewExpiry,
+        },
+      }),
+    });
+
+    return successResponse(res, { settings }, '证书设置已保存');
+  } catch (error: any) {
+    try {
+      await LoggerService.createLog({
+        userId: req.user!.id,
+        action: 'UPDATE',
+        resourceType: 'USER',
+        recordName: req.user?.username,
+        status: 'FAILED',
+        ipAddress: getClientIp(req),
+        errorMessage: error?.message || '证书设置保存失败',
+      });
+    } catch {}
+    return errorResponse(res, error?.message || '证书设置保存失败', 400);
+  }
+});
+
+router.post('/certificate-settings/test', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const channel = typeof req.body?.channel === 'string' ? req.body.channel.trim() : undefined;
+    const results = await CertificateNotificationService.sendTest(req.user!.id, channel as any);
+    return successResponse(res, { results }, '证书通知测试已发送');
+  } catch (error: any) {
+    return errorResponse(res, error?.message || '证书通知测试失败', 400);
+  }
+});
+
 /**
  * PUT /api/auth/domain-expiry-settings
- * 更新域名到期展示/阈值/通知设置
+ * 更新域名到期展示/阈值/SMTP 设置
  */
 router.put('/domain-expiry-settings', authenticateToken, async (req: AuthRequest, res) => {
   try {
@@ -235,10 +297,6 @@ router.put('/domain-expiry-settings', authenticateToken, async (req: AuthRequest
       displayMode,
       thresholdDays,
       showNonAuthoritativeDomains,
-      notifyEnabled,
-      webhookUrl,
-      notifyEmailEnabled,
-      emailTo,
       smtpHost,
       smtpPort,
       smtpSecure,
@@ -259,10 +317,6 @@ router.put('/domain-expiry-settings', authenticateToken, async (req: AuthRequest
       displayMode,
       thresholdDays,
       showNonAuthoritativeDomains,
-      notifyEnabled,
-      webhookUrl,
-      notifyEmailEnabled,
-      emailTo,
       smtpHost,
       smtpPort,
       smtpSecure,
@@ -283,10 +337,6 @@ router.put('/domain-expiry-settings', authenticateToken, async (req: AuthRequest
         displayMode: user.domainExpiryDisplayMode,
         thresholdDays: user.domainExpiryThresholdDays,
         showNonAuthoritativeDomains: (user as any).showNonAuthoritativeDomains ?? false,
-        notifyEnabled: user.domainExpiryNotifyEnabled,
-        webhookUrl: user.domainExpiryNotifyWebhookUrl ? 'set' : null,
-        notifyEmailEnabled: (user as any).domainExpiryNotifyEmailEnabled ?? false,
-        emailTo: (user as any).domainExpiryNotifyEmailTo ? 'set' : null,
         smtpHost: (user as any).smtpHost ? 'set' : null,
         smtpPort: (user as any).smtpPort ?? null,
         smtpSecure: (user as any).smtpSecure ?? null,

@@ -20,6 +20,7 @@ export enum ProviderType {
   NAMESILO = 'namesilo',
   POWERDNS = 'powerdns',
   SPACESHIP = 'spaceship',
+  UCLOUD = 'ucloud',
 }
 
 /**

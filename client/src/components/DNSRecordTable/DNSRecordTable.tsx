@@ -41,7 +41,6 @@ import { DnsLine, ProviderCapabilities, ProviderType } from '@/types/dns';
 import { formatTTL } from '@/utils/formatters';
 import { TTL_OPTIONS } from '@/utils/constants';
 import { useProvider } from '@/contexts/ProviderContext';
-import { alpha } from '@mui/material/styles';
 
 interface DNSRecordTableProps {
   records: DNSRecord[];
@@ -84,7 +83,6 @@ export default function DNSRecordTable({
     const el = containerRef.current;
     if (el) {
       const isOverflowing = el.scrollWidth > el.clientWidth;
-      const isScrolledLeft = el.scrollLeft > 0;
       setHasOverflow(isOverflowing && (el.scrollLeft < el.scrollWidth - el.clientWidth));
     }
   }, []);

@@ -22,6 +22,7 @@ import { useProvider } from '@/contexts/ProviderContext';
 const drawerWidth = 260;
 
 const breadcrumbNameMap: Record<string, string> = {
+  certificates: '证书中心',
   logs: '操作日志',
   settings: '设置',
   tunnels: 'Tunnels',

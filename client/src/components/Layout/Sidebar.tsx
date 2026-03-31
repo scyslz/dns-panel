@@ -32,12 +32,13 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   Dashboard as DashboardIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  WorkspacePremium as CertificateIcon
 } from '@mui/icons-material';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProvider } from '@/contexts/ProviderContext';
 import { ProviderType } from '@/types/dns';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { clearAuthData, getStoredUser } from '@/services/auth';
 
 const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: string; name: string }> = {
@@ -45,6 +46,7 @@ const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: stri
   aliyun: { icon: <AliyunIcon />, color: '#ff6a00', name: '阿里云' },
   dnspod: { icon: <DnspodIcon />, color: '#0052d9', name: '腾讯云' },
   dnspod_token: { icon: <DnspodIcon />, color: '#0052d9', name: '腾讯云' },
+  ucloud: { icon: <CloudIcon />, color: '#2563eb', name: 'UCloud' },
   huawei: { icon: <HuaweiIcon />, color: '#e60012', name: '华为云' },
   baidu: { icon: <BaiduIcon />, color: '#2932e1', name: '百度云' },
   west: { icon: <WestIcon />, color: '#1e88e5', name: '西部数码' },
@@ -57,12 +59,24 @@ const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: stri
 };
 
 const PROVIDER_ORDER: ProviderType[] = [
-  'cloudflare', 'aliyun', 'dnspod', 'huawei', 'baidu', 'west',
+  'cloudflare', 'aliyun', 'dnspod', 'ucloud', 'huawei', 'baidu', 'west',
   'huoshan', 'jdcloud', 'dnsla', 'namesilo', 'powerdns', 'spaceship',
 ];
 
+const DEFAULT_PROVIDER_STYLE = {
+  icon: <CloudIcon />,
+  color: '#64748b',
+};
+
+function resolveProviderConfig(provider: { type: ProviderType; name?: string }) {
+  return PROVIDER_CONFIG[provider.type] || {
+    ...DEFAULT_PROVIDER_STYLE,
+    name: provider.name || provider.type,
+  };
+}
+
 const PROVIDER_ORDER_STORAGE_KEY = 'dns-panel.sidebar.providerOrder.v1';
-const CANONICAL_PROVIDER_TYPES = (Object.keys(PROVIDER_CONFIG) as ProviderType[]).filter(t => t !== 'dnspod_token');
+const CANONICAL_PROVIDER_TYPES: ProviderType[] = PROVIDER_ORDER;
 
 const normalizeSidebarProviderType = (provider: ProviderType): ProviderType => {
   return provider === 'dnspod_token' ? 'dnspod' : provider;
@@ -122,6 +136,7 @@ interface SidebarProps {
 export default function Sidebar({ onClose }: SidebarProps) {
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = getStoredUser();
   const {
     providers,
@@ -236,6 +251,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
       .filter((p): p is NonNullable<typeof p> => p !== undefined),
     [providerOrder, sidebarProviders]
   );
+  const isCertificatesRoute = location.pathname.startsWith('/certificates');
+  const isDashboardRoute = location.pathname === '/';
 
   if (isLoading) {
     return (
@@ -309,10 +326,10 @@ export default function Sidebar({ onClose }: SidebarProps) {
                         py: 0.8,
                         px: 2,
                         borderRadius: '12px',
-                        bgcolor: !selectedProvider ? 'rgba(255,255,255,0.1)' : 'transparent',
-                        color: !selectedProvider ? 'white' : 'rgba(255,255,255,0.7)',
+                        bgcolor: !selectedProvider && !isCertificatesRoute && isDashboardRoute ? 'rgba(255,255,255,0.1)' : 'transparent',
+                        color: !selectedProvider && !isCertificatesRoute && isDashboardRoute ? 'white' : 'rgba(255,255,255,0.7)',
                         '&:hover': {
-                          bgcolor: !selectedProvider ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                          bgcolor: !selectedProvider && !isCertificatesRoute && isDashboardRoute ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
                           color: 'white'
                         },
                         '&.Mui-focusVisible': { bgcolor: 'transparent' },
@@ -400,6 +417,51 @@ export default function Sidebar({ onClose }: SidebarProps) {
                             
                       
                                         </Box>
+
+                                        <Box sx={{ px: 2, mt: 0.5, mb: 0.5 }}>
+                                          <ListItemButton
+                                            onClick={() => {
+                                              selectProvider(null);
+                                              navigate('/certificates');
+                                              if (onClose) onClose();
+                                            }}
+                                            sx={{
+                                              py: 0.8,
+                                              px: 2,
+                                              borderRadius: '12px',
+                                              bgcolor: isCertificatesRoute ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                              color: isCertificatesRoute ? 'white' : 'rgba(255,255,255,0.7)',
+                                              '&:hover': {
+                                                bgcolor: isCertificatesRoute ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                                                color: 'white'
+                                              },
+                                              '&.Mui-focusVisible': { bgcolor: 'transparent' },
+                                              '&:active': { bgcolor: 'transparent' }
+                                            }}
+                                          >
+                                            <Box
+                                              sx={{
+                                                width: 32,
+                                                height: 32,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                mr: 2,
+                                              }}
+                                            >
+                                              <CertificateIcon fontSize="small" sx={{ fontSize: 20 }} />
+                                            </Box>
+                                            <ListItemText
+                                              primary="证书中心"
+                                              primaryTypographyProps={{
+                                                variant: 'body2',
+                                                fontWeight: 500,
+                                                fontSize: '1rem'
+                                              }}
+                                            />
+                                          </ListItemButton>
+                                        </Box>
                       
                             
                       
@@ -437,12 +499,11 @@ export default function Sidebar({ onClose }: SidebarProps) {
                                         }}>
                       
                                           {sortedProviders.map((provider) => {
-                      
-                                            const config = PROVIDER_CONFIG[provider.type];
+                                            const config = resolveProviderConfig(provider);
                       
                                             const count = getCredentialCountByProvider(provider.type);
                       
-                                            const isSelected = selectedProvider === provider.type;
+                                            const isSelected = !isCertificatesRoute && selectedProvider === provider.type;
                       
                                             const hasAccounts = count > 0;
                       

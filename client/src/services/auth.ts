@@ -81,10 +81,6 @@ export const updateDomainExpirySettings = async (params: {
   displayMode?: 'date' | 'days';
   thresholdDays?: number;
   showNonAuthoritativeDomains?: boolean;
-  notifyEnabled?: boolean;
-  webhookUrl?: string | null;
-  notifyEmailEnabled?: boolean;
-  emailTo?: string | null;
   smtpHost?: string | null;
   smtpPort?: number | null;
   smtpSecure?: boolean | null;

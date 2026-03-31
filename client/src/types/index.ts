@@ -9,10 +9,6 @@ export interface User {
   domainExpiryDisplayMode?: 'date' | 'days';
   domainExpiryThresholdDays?: number;
   showNonAuthoritativeDomains?: boolean;
-  domainExpiryNotifyEnabled?: boolean;
-  domainExpiryNotifyWebhookUrl?: string | null;
-  domainExpiryNotifyEmailEnabled?: boolean;
-  domainExpiryNotifyEmailTo?: string | null;
   smtpHost?: string | null;
   smtpPort?: number | null;
   smtpSecure?: boolean | null;

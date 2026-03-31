@@ -86,9 +86,15 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export async function sendDomainExpiryEmail(params: {
+function plainTextToHtml(text: string) {
+  return `<div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; line-height:1.6; white-space:pre-wrap;">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>`;
+}
+
+export async function sendEmailMessage(params: {
   to: string;
-  payload: any;
+  subject: string;
+  text: string;
+  html?: string;
   smtp?: Partial<SmtpConfig> | null;
 }): Promise<void> {
   const to = String(params?.to || '').trim();
@@ -96,61 +102,15 @@ export async function sendDomainExpiryEmail(params: {
     throw new Error('收件邮箱无效');
   }
 
-  const payload = params?.payload || {};
-  const domain = String(payload?.domain || '').trim();
-  const expiresAt = String(payload?.expiresAt || '').trim();
-  const daysLeft = Number(payload?.daysLeft);
-  const thresholdDays = Number(payload?.thresholdDays);
-  const checkedAt = String(payload?.checkedAt || '').trim();
+  const subject = String(params?.subject || '').trim();
+  if (!subject) {
+    throw new Error('邮件标题不能为空');
+  }
 
-  const accounts = Array.isArray(payload?.accounts) ? payload.accounts : [];
-  const accountsText = accounts
-    .map((a: any) => {
-      const provider = a?.provider ? String(a.provider) : '';
-      const name = a?.credentialName ? String(a.credentialName) : '';
-      const id = a?.credentialId !== undefined ? String(a.credentialId) : '';
-      const parts = [name || id].filter(Boolean).join('');
-      return `- ${parts || '-'}${provider ? ` (${provider})` : ''}`;
-    })
-    .join('\n');
-
-  const subjectDaysLeft = Number.isFinite(daysLeft) ? `（剩余 ${daysLeft} 天）` : '';
-  const subject = `[DNS Panel] 域名到期提醒：${domain || '-'}${subjectDaysLeft}`;
-
-  const text =
-    `域名到期提醒\n\n` +
-    `域名: ${domain || '-'}\n` +
-    `到期日期(UTC): ${expiresAt || '-'}\n` +
-    `剩余天数: ${Number.isFinite(daysLeft) ? daysLeft : '-'}\n` +
-    `阈值(天): ${Number.isFinite(thresholdDays) ? thresholdDays : '-'}\n` +
-    (accountsText ? `\n关联账户:\n${accountsText}\n` : '') +
-    (checkedAt ? `\n检查时间: ${checkedAt}\n` : '');
-
-  const htmlAccounts = accounts
-    .map((a: any) => {
-      const provider = a?.provider ? String(a.provider) : '';
-      const name = a?.credentialName ? String(a.credentialName) : '';
-      const id = a?.credentialId !== undefined ? String(a.credentialId) : '';
-      const label = escapeHtml(name || id || '-');
-      const p = escapeHtml(provider || '');
-      return `<li>${label}${p ? ` <span style="color:#6b7280;">(${p})</span>` : ''}</li>`;
-    })
-    .join('');
-
-  const html =
-    `<div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; line-height:1.6;">` +
-    `<h2 style="margin:0 0 12px;">域名到期提醒</h2>` +
-    `<table style="border-collapse:collapse;">` +
-    `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">域名</td><td style="padding:4px 0;">${escapeHtml(domain || '-')}</td></tr>` +
-    `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">到期日期(UTC)</td><td style="padding:4px 0;">${escapeHtml(expiresAt || '-')}</td></tr>` +
-    `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">剩余天数</td><td style="padding:4px 0;">${Number.isFinite(daysLeft) ? daysLeft : '-'}</td></tr>` +
-    `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">阈值(天)</td><td style="padding:4px 0;">${Number.isFinite(thresholdDays) ? thresholdDays : '-'}</td></tr>` +
-    (checkedAt
-      ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">检查时间</td><td style="padding:4px 0;">${escapeHtml(checkedAt)}</td></tr>`
-      : '') +
-    `</table>` +
-    (htmlAccounts ? `<h3 style="margin:16px 0 8px;font-size:14px;color:#111827;">关联账户</h3><ul style="margin:0;padding-left:18px;">${htmlAccounts}</ul>` : '') +
-    `</div>`;
+  const text = String(params?.text || '').trim();
+  if (!text) {
+    throw new Error('邮件内容不能为空');
+  }
 
   const smtp = normalizeSmtpConfig(params?.smtp);
   const transporter = getTransporter(smtp);
@@ -159,6 +119,6 @@ export async function sendDomainExpiryEmail(params: {
     to,
     subject,
     text,
-    html,
+    html: String(params?.html || '').trim() || plainTextToHtml(text),
   });
 }

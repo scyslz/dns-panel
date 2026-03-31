@@ -19,10 +19,6 @@ interface LoginResult {
     domainExpiryDisplayMode: string;
     domainExpiryThresholdDays: number;
     showNonAuthoritativeDomains: boolean;
-    domainExpiryNotifyEnabled: boolean;
-    domainExpiryNotifyWebhookUrl: string | null;
-    domainExpiryNotifyEmailEnabled: boolean;
-    domainExpiryNotifyEmailTo: string | null;
     smtpHost: string | null;
     smtpPort: number | null;
     smtpSecure: boolean | null;
@@ -146,10 +142,6 @@ export class AuthService {
         domainExpiryDisplayMode: user.domainExpiryDisplayMode,
         domainExpiryThresholdDays: user.domainExpiryThresholdDays,
         showNonAuthoritativeDomains: (user as any).showNonAuthoritativeDomains ?? false,
-        domainExpiryNotifyEnabled: user.domainExpiryNotifyEnabled,
-        domainExpiryNotifyWebhookUrl: user.domainExpiryNotifyWebhookUrl,
-        domainExpiryNotifyEmailEnabled: (user as any).domainExpiryNotifyEmailEnabled ?? false,
-        domainExpiryNotifyEmailTo: (user as any).domainExpiryNotifyEmailTo ?? null,
         smtpHost: (user as any).smtpHost ?? null,
         smtpPort: (user as any).smtpPort ?? null,
         smtpSecure: (user as any).smtpSecure ?? null,
@@ -175,10 +167,6 @@ export class AuthService {
         domainExpiryDisplayMode: true,
         domainExpiryThresholdDays: true,
         showNonAuthoritativeDomains: true,
-        domainExpiryNotifyEnabled: true,
-        domainExpiryNotifyWebhookUrl: true,
-        domainExpiryNotifyEmailEnabled: true,
-        domainExpiryNotifyEmailTo: true,
         smtpHost: true,
         smtpPort: true,
         smtpSecure: true,
@@ -207,10 +195,6 @@ export class AuthService {
       displayMode?: 'date' | 'days';
       thresholdDays?: number;
       showNonAuthoritativeDomains?: boolean;
-      notifyEnabled?: boolean;
-      webhookUrl?: string | null;
-      notifyEmailEnabled?: boolean;
-      emailTo?: string | null;
       smtpHost?: string | null;
       smtpPort?: number | null;
       smtpSecure?: boolean | null;
@@ -222,10 +206,7 @@ export class AuthService {
     const current = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        email: true,
         showNonAuthoritativeDomains: true,
-        domainExpiryNotifyEmailEnabled: true,
-        domainExpiryNotifyEmailTo: true,
         smtpHost: true,
         smtpPort: true,
         smtpSecure: true,
@@ -238,25 +219,6 @@ export class AuthService {
     if (!current) {
       throw new Error('用户不存在');
     }
-
-    if (input.emailTo !== undefined) {
-      const raw = typeof input.emailTo === 'string' ? input.emailTo.trim() : '';
-      if (raw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
-        throw new Error('收件邮箱格式不正确');
-      }
-    }
-
-    const nextNotifyEmailEnabled =
-      input.notifyEmailEnabled !== undefined
-        ? !!input.notifyEmailEnabled
-        : !!(current as any).domainExpiryNotifyEmailEnabled;
-
-    const nextEmailToRaw =
-      input.emailTo !== undefined
-        ? (typeof input.emailTo === 'string' ? input.emailTo.trim() : '')
-        : ((current as any).domainExpiryNotifyEmailTo ?? '');
-    const nextEmailTo = nextEmailToRaw ? nextEmailToRaw : null;
-    const emailTarget = nextEmailTo || current.email || '';
 
     const smtpTouched =
       input.smtpHost !== undefined ||
@@ -330,51 +292,14 @@ export class AuthService {
         nextSmtpFrom = raw ? raw : null;
       }
 
+      if (!String(nextSmtpFrom || '').trim()) {
+        throw new Error('使用自定义 SMTP 时需填写 From');
+      }
+
       const authUser = typeof nextSmtpUser === 'string' ? nextSmtpUser.trim() : '';
       const authPassPresent = !!(typeof nextSmtpPass === 'string' ? nextSmtpPass.trim() : '');
       if ((authUser && !authPassPresent) || (!authUser && authPassPresent)) {
         throw new Error('SMTP 认证信息不完整');
-      }
-    }
-
-    if (nextNotifyEmailEnabled) {
-      if (!emailTarget) {
-        throw new Error('启用邮件通知需要填写收件邮箱');
-      }
-
-      if (hasCustomSmtp) {
-        const host = String(nextSmtpHost || '').trim();
-        const port = nextSmtpPort !== null ? Number(nextSmtpPort) : 587;
-        const from = String(nextSmtpFrom || '').trim();
-
-        if (!host) {
-          throw new Error('启用邮件通知需要配置 SMTP_HOST');
-        }
-        if (!Number.isFinite(port) || port <= 0) {
-          throw new Error('启用邮件通知需要配置 SMTP_PORT');
-        }
-        if (!from) {
-          throw new Error('启用邮件通知需要配置 SMTP_FROM');
-        }
-      } else {
-        const host = String(config.smtp.host || '').trim();
-        const port = Number(config.smtp.port);
-        const from = String(config.smtp.from || '').trim();
-        const user = String(config.smtp.user || '').trim();
-        const pass = String(config.smtp.pass || '').trim();
-
-        if (!host) {
-          throw new Error('启用邮件通知需要配置环境变量 SMTP_HOST');
-        }
-        if (!Number.isFinite(port) || port <= 0) {
-          throw new Error('启用邮件通知需要配置环境变量 SMTP_PORT');
-        }
-        if (!from) {
-          throw new Error('启用邮件通知需要配置环境变量 SMTP_FROM');
-        }
-        if ((user && !pass) || (!user && pass)) {
-          throw new Error('环境变量 SMTP_USER/SMTP_PASS 不完整');
-        }
       }
     }
 
@@ -396,24 +321,6 @@ export class AuthService {
       data.showNonAuthoritativeDomains = !!input.showNonAuthoritativeDomains;
     }
 
-    if (input.notifyEnabled !== undefined) {
-      data.domainExpiryNotifyEnabled = !!input.notifyEnabled;
-    }
-
-    if (input.webhookUrl !== undefined) {
-      const raw = typeof input.webhookUrl === 'string' ? input.webhookUrl.trim() : '';
-      data.domainExpiryNotifyWebhookUrl = raw ? raw : null;
-    }
-
-    if (input.notifyEmailEnabled !== undefined) {
-      data.domainExpiryNotifyEmailEnabled = !!input.notifyEmailEnabled;
-    }
-
-    if (input.emailTo !== undefined) {
-      const raw = typeof input.emailTo === 'string' ? input.emailTo.trim() : '';
-      data.domainExpiryNotifyEmailTo = raw ? raw : null;
-    }
-
     if (smtpTouched) {
       data.smtpHost = hasCustomSmtp ? nextSmtpHost : null;
       data.smtpPort = hasCustomSmtp ? nextSmtpPort : null;
@@ -433,10 +340,6 @@ export class AuthService {
         domainExpiryDisplayMode: true,
         domainExpiryThresholdDays: true,
         showNonAuthoritativeDomains: true,
-        domainExpiryNotifyEnabled: true,
-        domainExpiryNotifyWebhookUrl: true,
-        domainExpiryNotifyEmailEnabled: true,
-        domainExpiryNotifyEmailTo: true,
         smtpHost: true,
         smtpPort: true,
         smtpSecure: true,

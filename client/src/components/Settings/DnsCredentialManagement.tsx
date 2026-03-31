@@ -97,6 +97,16 @@ const PROVIDER_CREDENTIAL_GUIDE: Record<ProviderType, { title: string; steps: st
     ],
     link: 'https://console.dnspod.cn/account/token'
   },
+  ucloud: {
+    title: 'UCloud API Key 获取方式',
+    steps: [
+      '登录 UCloud 控制台',
+      '进入 个人中心 → API 密钥',
+      '创建或查看 API Key',
+      '复制 PublicKey 和 PrivateKey 并填写'
+    ],
+    link: 'https://console.ucloud.cn/uapi/apikey'
+  },
   huawei: {
     title: '华为云 AccessKey 获取方式',
     steps: [

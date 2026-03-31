@@ -21,6 +21,19 @@ export const config = {
   // 加密配置
   encryptionKey: process.env.ENCRYPTION_KEY || 'default-32-character-key-here!',
 
+  // ACME 配置
+  acme: {
+    env: (String(process.env.ACME_ENV || 'staging').toLowerCase() === 'production' ? 'production' : 'staging') as 'staging' | 'production',
+    schedulerIntervalMs: Math.max(5000, parseInt(process.env.CERTIFICATE_SCHEDULER_INTERVAL_MS || '15000', 10) || 15000),
+    renewalSchedulerIntervalMs: Math.max(60000, parseInt(process.env.CERTIFICATE_RENEWAL_SCHEDULER_INTERVAL_MS || '21600000', 10) || 21600000),
+    propagationDelayMs: Math.max(5000, parseInt(process.env.ACME_PROPAGATION_DELAY_MS || '30000', 10) || 30000),
+  },
+
+  certificates: {
+    vendorSchedulerIntervalMs: Math.max(5000, parseInt(process.env.VENDOR_CERTIFICATE_SCHEDULER_INTERVAL_MS || '30000', 10) || 30000),
+    deploySchedulerIntervalMs: Math.max(5000, parseInt(process.env.CERTIFICATE_DEPLOY_SCHEDULER_INTERVAL_MS || '30000', 10) || 30000),
+  },
+
   // SMTP 配置（邮件通知）
   smtp: {
     host: process.env.SMTP_HOST || '',

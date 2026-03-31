@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-type DomainExpirySource = 'rdap' | 'whois' | 'unknown';
+type DomainExpirySource = 'rdap' | 'whois' | 'manual' | 'unknown';
 
 export interface DomainExpiryResult {
   domain: string;
@@ -319,7 +319,7 @@ export class DomainExpiryService {
             return {
               domain,
               expiresAt: typeof parsed?.expiresAt === 'string' ? parsed.expiresAt : undefined,
-              source: parsedSource === 'rdap' || parsedSource === 'whois' ? parsedSource : 'unknown',
+              source: parsedSource === 'rdap' || parsedSource === 'whois' || parsedSource === 'manual' ? parsedSource : 'unknown',
               checkedAt: typeof parsed?.checkedAt === 'string' ? parsed.checkedAt : cached.createdAt.toISOString(),
               error: typeof parsed?.error === 'string' ? parsed.error : undefined,
             } satisfies DomainExpiryResult;

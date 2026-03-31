@@ -197,10 +197,6 @@ export class TwoFactorService {
       domainExpiryDisplayMode: string;
       domainExpiryThresholdDays: number;
       showNonAuthoritativeDomains: boolean;
-      domainExpiryNotifyEnabled: boolean;
-      domainExpiryNotifyWebhookUrl: string | null;
-      domainExpiryNotifyEmailEnabled: boolean;
-      domainExpiryNotifyEmailTo: string | null;
       smtpHost: string | null;
       smtpPort: number | null;
       smtpSecure: boolean | null;
@@ -225,10 +221,6 @@ export class TwoFactorService {
         domainExpiryDisplayMode: true,
         domainExpiryThresholdDays: true,
         showNonAuthoritativeDomains: true,
-        domainExpiryNotifyEnabled: true,
-        domainExpiryNotifyWebhookUrl: true,
-        domainExpiryNotifyEmailEnabled: true,
-        domainExpiryNotifyEmailTo: true,
         smtpHost: true,
         smtpPort: true,
         smtpSecure: true,
@@ -272,10 +264,6 @@ export class TwoFactorService {
         domainExpiryDisplayMode: user.domainExpiryDisplayMode,
         domainExpiryThresholdDays: user.domainExpiryThresholdDays,
         showNonAuthoritativeDomains: (user as any).showNonAuthoritativeDomains ?? false,
-        domainExpiryNotifyEnabled: user.domainExpiryNotifyEnabled,
-        domainExpiryNotifyWebhookUrl: user.domainExpiryNotifyWebhookUrl,
-        domainExpiryNotifyEmailEnabled: (user as any).domainExpiryNotifyEmailEnabled ?? false,
-        domainExpiryNotifyEmailTo: (user as any).domainExpiryNotifyEmailTo ?? null,
         smtpHost: (user as any).smtpHost ?? null,
         smtpPort: (user as any).smtpPort ?? null,
         smtpSecure: (user as any).smtpSecure ?? null,

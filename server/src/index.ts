@@ -16,6 +16,15 @@ import aliyunEsaRoutes from './routes/aliyunEsa';
 import domainExpiryRoutes from './routes/domainExpiry';
 import tunnelRoutes from './routes/tunnels';
 import { startDomainExpiryScheduler } from './jobs/domainExpiryScheduler';
+import certificateCredentialRoutes from './routes/certificateCredentials';
+import certificateRoutes from './routes/certificates';
+import certificateDeployRoutes from './routes/certificateDeploy';
+import vendorCertificateRoutes from './routes/vendorCertificates';
+import certificateAliasesRoutes from './routes/certificateAliases';
+import { startCertificateOrderScheduler } from './jobs/certificateOrderScheduler';
+import { startCertificateRenewalScheduler } from './jobs/certificateRenewalScheduler';
+import { startVendorCertificateScheduler } from './jobs/vendorCertificateScheduler';
+import { startCertificateDeployScheduler } from './jobs/certificateDeployScheduler';
 
 // 验证配置
 validateConfig();
@@ -42,6 +51,11 @@ app.use('/api/hostnames', hostnameRoutes);
 app.use('/api/tunnels', tunnelRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/domain-expiry', domainExpiryRoutes);
+app.use('/api/certificate-credentials', certificateCredentialRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/certificate-deploy', certificateDeployRoutes);
+app.use('/api/vendor-certificates', vendorCertificateRoutes);
+app.use('/api/certificate-aliases', certificateAliasesRoutes);
 
 // 静态文件服务 (生产环境)
 // 在 Docker 中，前端构建产物将被复制到 /app/public
@@ -79,6 +93,10 @@ app.listen(config.port, () => {
   `);
 
   startDomainExpiryScheduler();
+  startCertificateOrderScheduler();
+  startCertificateRenewalScheduler();
+  startVendorCertificateScheduler();
+  startCertificateDeployScheduler();
 });
 
 // 优雅关闭

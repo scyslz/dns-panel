@@ -17,6 +17,7 @@ import { DnslaProvider, DNSLA_CAPABILITIES } from './dnsla';
 import { NamesiloProvider, NAMESILO_CAPABILITIES } from './namesilo';
 import { PowerdnsProvider, POWERDNS_CAPABILITIES } from './powerdns';
 import { SpaceshipProvider, SPACESHIP_CAPABILITIES } from './spaceship';
+import { UcloudProvider, UCLOUD_CAPABILITIES } from './ucloud';
 import {
   IDnsProvider,
   ProviderCapabilities,
@@ -68,6 +69,7 @@ export class ProviderRegistry {
     [ProviderType.NAMESILO]: NamesiloProvider,
     [ProviderType.POWERDNS]: PowerdnsProvider,
     [ProviderType.SPACESHIP]: SpaceshipProvider,
+    [ProviderType.UCLOUD]: UcloudProvider,
   };
 
   /**
@@ -87,6 +89,7 @@ export class ProviderRegistry {
     [ProviderType.NAMESILO]: NAMESILO_CAPABILITIES,
     [ProviderType.POWERDNS]: POWERDNS_CAPABILITIES,
     [ProviderType.SPACESHIP]: SPACESHIP_CAPABILITIES,
+    [ProviderType.UCLOUD]: UCLOUD_CAPABILITIES,
   };
 
   /**
