@@ -519,9 +519,29 @@ export class DnspodProvider extends BaseProvider {
     try {
       if (this.legacyProvider) return await this.legacyProvider.getZone(zoneId);
       const idNum = Number(zoneId);
-      const payload = Number.isFinite(idNum)
-        ? { DomainId: idNum }
-        : { Domain: String(zoneId || '').trim() };
+      let payload: { Domain: string; DomainId?: number };
+
+      if (Number.isFinite(idNum)) {
+        let domainName = '';
+
+        for (let page = 1; page <= 50; page++) {
+          const resp = await this.getZones(page, 100);
+          const found = resp.zones.find(z => Number(z.id) === idNum);
+          if (found?.name) {
+            domainName = found.name;
+            break;
+          }
+          if (page * 100 >= resp.total) break;
+        }
+
+        if (!domainName) {
+          throw this.createError('ZONE_NOT_FOUND', `域名不存在: ${zoneId}`, { httpStatus: 404 });
+        }
+
+        payload = { DomainId: idNum, Domain: domainName };
+      } else {
+        payload = { Domain: String(zoneId || '').trim() };
+      }
 
       const resp = await this.request<DescribeDomainResponse>('DescribeDomain', payload);
       const info = resp.Response?.DomainInfo;
