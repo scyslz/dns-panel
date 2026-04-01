@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  IconButton,
   Stack,
   Tab,
   Table,
@@ -14,9 +15,16 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import { Add as AddIcon, Download as DownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Autorenew as RetryIcon,
+  Download as DownloadIcon,
+  Refresh as RefreshIcon,
+  VisibilityOutlined as DetailIcon,
+} from '@mui/icons-material';
 import { getDnsCredentials } from '@/services/dnsCredentials';
 import {
   createVendorCertificateOrder,
@@ -355,39 +363,48 @@ export default function VendorCertificateSection() {
                       className="certificate-vendor-sticky-action"
                       sx={{
                         ...stickyBodyCellSx,
-                        minWidth: 220,
+                        minWidth: 132,
                       }}
                     >
-                      <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="nowrap" sx={{ whiteSpace: 'nowrap' }}>
-                        <Button
-                          size="small"
-                          color="inherit"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleOpenDetail(order);
-                          }}
-                        >
-                          详情
-                        </Button>
-                        {order.canRetry ? (
-                          <Button
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
+                        <Tooltip title="详情">
+                          <IconButton
                             size="small"
-                            variant="outlined"
-                            onClick={(event) => handleRetryClick(event, order)}
-                            disabled={retryingId === order.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleOpenDetail(order);
+                            }}
                           >
-                            {retryingId === order.id ? '提交中...' : '重试'}
-                          </Button>
+                            <DetailIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {order.canRetry ? (
+                          <Tooltip title={retryingId === order.id ? '提交中...' : '重试'}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={(event) => handleRetryClick(event, order)}
+                                disabled={retryingId === order.id}
+                              >
+                                {retryingId === order.id ? <CircularProgress size={18} /> : <RetryIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         ) : null}
                         {order.canDownload ? (
-                          <Button
-                            size="small"
-                            startIcon={<DownloadIcon />}
-                            onClick={(event) => handleDownloadClick(event, order)}
-                            disabled={downloadingId === order.id}
-                          >
-                            {downloadingId === order.id ? '下载中...' : '下载'}
-                          </Button>
+                          <Tooltip title={downloadingId === order.id ? '下载中...' : '下载'}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={(event) => handleDownloadClick(event, order)}
+                                disabled={downloadingId === order.id}
+                              >
+                                {downloadingId === order.id ? <CircularProgress size={18} /> : <DownloadIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         ) : null}
                       </Stack>
                     </TableCell>
@@ -415,11 +432,7 @@ export default function VendorCertificateSection() {
         open={!!detailOrder}
         orderId={detailOrder?.id || null}
         initialOrder={detailOrder}
-        retrying={retryingId === detailOrder?.id}
-        downloading={downloadingId === detailOrder?.id}
         onClose={() => setDetailOrder(null)}
-        onRetry={handleRetry}
-        onDownload={handleDownload}
       />
     </>
   );

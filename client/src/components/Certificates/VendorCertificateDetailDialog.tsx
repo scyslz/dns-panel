@@ -69,20 +69,12 @@ export default function VendorCertificateDetailDialog({
   open,
   orderId,
   initialOrder,
-  retrying,
-  downloading,
   onClose,
-  onRetry,
-  onDownload,
 }: {
   open: boolean;
   orderId: number | null;
   initialOrder: VendorCertificate | null;
-  retrying: boolean;
-  downloading: boolean;
   onClose: () => void;
-  onRetry?: (order: VendorCertificate) => void;
-  onDownload?: (order: VendorCertificate) => void;
 }) {
   const [order, setOrder] = useState<VendorCertificate | null>(initialOrder);
   const [loading, setLoading] = useState(false);
@@ -331,16 +323,6 @@ export default function VendorCertificateDetailDialog({
         <Button onClick={onClose} color="inherit">
           关闭
         </Button>
-        {order.canRetry && onRetry ? (
-          <Button variant="outlined" onClick={() => onRetry(order)} disabled={retrying}>
-            {retrying ? '处理中...' : '重试'}
-          </Button>
-        ) : null}
-        {order.canDownload && onDownload ? (
-          <Button variant="contained" onClick={() => onDownload(order)} disabled={downloading}>
-            {downloading ? '下载中...' : '下载证书'}
-          </Button>
-        ) : null}
       </DialogActions>
     </Dialog>
   );

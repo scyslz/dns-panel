@@ -1,5 +1,6 @@
-import { Domain } from '@/types';
+import { Domain, DNSRecord } from '@/types';
 import { DnsCredential } from '@/types/dns';
+import { createDNSRecord, getDNSRecords, updateDNSRecord } from '@/services/dns';
 import { getDomainById, getDomains } from '@/services/domains';
 
 export const normalizeHostname = (input: unknown): string =>
@@ -47,6 +48,76 @@ export const toRelativeRecordName = (fqdn: string, zoneName: string): string => 
 
   return hostParts.slice(0, hostParts.length - zoneParts.length).join('.') || '@';
 };
+
+export type AutoDnsRecordType = 'TXT' | 'CNAME';
+
+export const toRecordFqdn = (record: DNSRecord, fallbackZoneName?: string): string => {
+  const recordName = String(record.name || '').trim().replace(/\.+$/, '');
+  const zoneName = String(record.zoneName || fallbackZoneName || '').trim().replace(/\.+$/, '');
+
+  if (!recordName) return normalizeHostname(zoneName);
+  if (recordName === '@') return normalizeHostname(zoneName);
+
+  const normalizedRecordName = normalizeHostname(recordName);
+  const normalizedZoneName = normalizeHostname(zoneName);
+
+  if (!normalizedZoneName) return normalizedRecordName;
+  if (normalizedRecordName === normalizedZoneName || normalizedRecordName.endsWith(`.${normalizedZoneName}`)) {
+    return normalizedRecordName;
+  }
+
+  return normalizeHostname(`${recordName}.${zoneName}`);
+};
+
+export const pickSilentAutoDnsCandidate = (hostname: string, candidates: Domain[]): Domain | null => {
+  const best = findBestZone(hostname, candidates);
+  if (!best) return null;
+
+  const normalizedBestZone = normalizeHostname(best.name);
+  const bestZoneTargets = candidates.filter((candidate) => normalizeHostname(candidate.name) === normalizedBestZone);
+  const uniqueTargets = new Set(bestZoneTargets.map((candidate) => `${candidate.credentialId ?? 'na'}:${candidate.id}`));
+
+  if (uniqueTargets.size > 1) return null;
+  return best;
+};
+
+export async function upsertDnsRecordForZone(
+  zone: Domain,
+  params: { recordType: AutoDnsRecordType; fqdn: string; value: string }
+): Promise<{ action: 'create' | 'update'; record: DNSRecord | null }> {
+  if (typeof zone.credentialId !== 'number') {
+    throw new Error('目标域名缺少账户信息');
+  }
+
+  const existingResp = await getDNSRecords(zone.id, zone.credentialId);
+  const existingRecords = existingResp.data?.records || [];
+  const expectedFqdn = normalizeHostname(params.fqdn);
+  const expectedValue = String(params.value || '').trim();
+  const existingRecord = existingRecords.find((record) => {
+    const sameName = toRecordFqdn(record, zone.name) === expectedFqdn;
+    const sameType = String(record.type || '').trim().toUpperCase() === params.recordType;
+    if (!sameName || !sameType) return false;
+    if (params.recordType !== 'TXT') return true;
+    return String(record.content || '').trim() === expectedValue;
+  });
+
+  const payload = {
+    type: params.recordType,
+    name: toRelativeRecordName(params.fqdn, zone.name) || '@',
+    content: params.value,
+  };
+
+  if (existingRecord?.id) {
+    if (String(existingRecord.content || '').trim() === expectedValue) {
+      return { action: 'update', record: existingRecord };
+    }
+    const resp = await updateDNSRecord(zone.id, existingRecord.id, payload, zone.credentialId);
+    return { action: 'update', record: resp.data?.record || null };
+  }
+
+  const resp = await createDNSRecord(zone.id, payload, zone.credentialId);
+  return { action: 'create', record: resp.data?.record || null };
+}
 
 export const isAuthoritativeZone = (domain: Domain | null | undefined): boolean =>
   domain?.authorityStatus === 'authoritative';

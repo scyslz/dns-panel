@@ -108,12 +108,20 @@ function firstCertificatePem(content: string): string {
   return match ? match[0].trim() : '';
 }
 
-function extractPemBlocks(content: string, label: string): string[] {
-  return Array.from(String(content || '').matchAll(new RegExp(`-----BEGIN ${label}-----[\\s\\S]+?-----END ${label}-----`, 'g'))).map((item) => item[0].trim());
+const PRIVATE_KEY_PEM_LABELS = ['PRIVATE KEY', 'RSA PRIVATE KEY', 'EC PRIVATE KEY', 'ENCRYPTED PRIVATE KEY'] as const;
+
+function escapeRegex(input: string): string {
+  return String(input || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function hasPemBlock(content: string, label: string): boolean {
-  return extractPemBlocks(content, label).length > 0;
+function extractPemBlocks(content: string, label: string): string[] {
+  const escapedLabel = escapeRegex(label);
+  return Array.from(String(content || '').matchAll(new RegExp(`-----BEGIN ${escapedLabel}-----[\s\S]+?-----END ${escapedLabel}-----`, 'g'))).map((item) => item[0].trim());
+}
+
+function hasPemBlock(content: string, label: string | readonly string[]): boolean {
+  const labels = Array.isArray(label) ? label : [label];
+  return labels.some((item) => extractPemBlocks(content, item).length > 0);
 }
 
 function parseCertificateDates(certificatePem: string, issuedAt?: string | number | Date | null, expiresAt?: string | number | Date | null) {
@@ -419,12 +427,12 @@ async function parseZipCertificate(buffer: Buffer) {
       }))
   );
 
-  const privateKey = files.find((file) => /(?:^|\/)(?:.+\.)?(key|txt)$/i.test(file.name) || file.name.includes('private'));
+  const privateKey = files.find((file) => hasPemBlock(file.content, PRIVATE_KEY_PEM_LABELS) || /(?:^|\/)(?:.+\.)?(key|txt)$/i.test(file.name) || file.name.includes('private'));
   const certFiles = files.filter((file) => /\.(crt|pem|cer)$/i.test(file.name) && hasPemBlock(file.content, 'CERTIFICATE'));
   const fullchain = certFiles.find((file) => /(bundle|fullchain|chain)/i.test(file.name)) || certFiles[0];
   const leaf = certFiles.find((file) => !/(bundle|fullchain|chain)/i.test(file.name)) || fullchain;
 
-  if (!privateKey || !hasPemBlock(privateKey.content, 'PRIVATE KEY')) throw new Error('下载内容中缺少私钥文件');
+  if (!privateKey || !hasPemBlock(privateKey.content, PRIVATE_KEY_PEM_LABELS)) throw new Error('下载内容中缺少私钥文件');
   if (!fullchain || !leaf) throw new Error('下载内容中缺少证书文件');
 
   const certificatePem = firstCertificatePem(leaf.content) || leaf.content.trim();

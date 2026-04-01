@@ -1,9 +1,9 @@
 import {
   Alert,
-  Button,
   Chip,
   CircularProgress,
   FormControlLabel,
+  IconButton,
   Stack,
   Switch,
   Table,
@@ -16,11 +16,15 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  Autorenew as RetryIcon,
   CheckCircle as SuccessIcon,
+  Delete as DeleteIcon,
   Description as DraftIcon,
+  Download as DownloadIcon,
   ErrorOutline as ErrorIcon,
   InfoOutlined as InfoIcon,
   Pending as PendingIcon,
+  VisibilityOutlined as ViewIcon,
 } from '@mui/icons-material';
 import { CertificateOrder, CertificateStatus, getCertificateStatusColor, getCertificateStatusLabel, getRetryActionLabel } from '@/types/cert';
 import { formatDateTime, formatRelativeTime } from '@/utils/formatters';
@@ -124,23 +128,9 @@ export default function CertificateTable({
           {orders.map((order) => {
             const retryLabel = getRetryActionLabel(order.status);
             const hasDeployJobs = (order.deployJobsCount || 0) > 0;
-
-            const deleteAction = (
-              <Button
-                size="small"
-                color="error"
-                onClick={() => onDelete(order)}
-                disabled={deletingId === order.id || hasDeployJobs}
-              >
-                {deletingId === order.id ? '删除中...' : '删除'}
-              </Button>
-            );
-
-            const deleteActionWithTooltip = hasDeployJobs ? (
-              <Tooltip title="该订单已绑定部署任务，无法删除">
-                <span>{deleteAction}</span>
-              </Tooltip>
-            ) : deleteAction;
+            const deleteTooltip = hasDeployJobs
+              ? '该订单已绑定部署任务，无法删除'
+              : (deletingId === order.id ? '删除中...' : '删除');
 
             return (
               <TableRow
@@ -207,34 +197,55 @@ export default function CertificateTable({
                   className="certificate-order-sticky-action"
                   sx={{
                     ...stickyBodyCellSx,
-                    minWidth: 280,
+                    minWidth: 172,
                   }}
                 >
-                  <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="nowrap" sx={{ whiteSpace: 'nowrap' }}>
-                    <Button size="small" onClick={() => onView(order)}>
-                      查看详情
-                    </Button>
+                  <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
+                    <Tooltip title="查看详情">
+                      <IconButton size="small" onClick={() => onView(order)}>
+                        <ViewIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     {order.canRetry ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => onRetry(order)}
-                        disabled={retryingId === order.id}
-                      >
-                        {retryingId === order.id ? '处理中...' : retryLabel}
-                      </Button>
+                      <Tooltip title={retryingId === order.id ? '处理中...' : retryLabel}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => onRetry(order)}
+                            disabled={retryingId === order.id}
+                          >
+                            {retryingId === order.id ? <CircularProgress size={18} /> : <RetryIcon fontSize="small" />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     ) : null}
                     {order.canDownload ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => onDownload(order)}
-                        disabled={downloadingId === order.id}
-                      >
-                        {downloadingId === order.id ? '下载中...' : '下载证书'}
-                      </Button>
+                      <Tooltip title={downloadingId === order.id ? '下载中...' : '下载证书'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => onDownload(order)}
+                            disabled={downloadingId === order.id}
+                          >
+                            {downloadingId === order.id ? <CircularProgress size={18} /> : <DownloadIcon fontSize="small" />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     ) : null}
-                    {deleteActionWithTooltip}
+                    <Tooltip title={deleteTooltip}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => onDelete(order)}
+                          disabled={deletingId === order.id || hasDeployJobs}
+                        >
+                          {deletingId === order.id ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Stack>
                 </TableCell>
               </TableRow>

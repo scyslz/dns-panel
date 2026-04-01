@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -20,8 +20,7 @@ import {
   CertificateOrder,
   CertificateTimelineEntry,
   getCertificateStatusColor,
-  getCertificateStatusLabel,
-  getRetryActionLabel,
+  getCertificateStatusLabel
 } from '@/types/cert';
 import { formatDateTime } from '@/utils/formatters';
 import { certificateDialogActionsSx, certificateDialogContentSx, certificateDialogTitleSx } from './certificateTableStyles';
@@ -36,33 +35,17 @@ function renderDate(value?: string | null) {
 export default function CertificateOrderDetailDialog({
   open,
   order,
-  retrying,
-  downloading,
-  deleting,
   onClose,
-  onRetry,
-  onDownload,
-  onDelete,
 }: {
   open: boolean;
   order: CertificateOrder | null;
-  retrying: boolean;
-  downloading: boolean;
-  deleting: boolean;
   onClose: () => void;
-  onRetry?: (order: CertificateOrder) => void;
-  onDownload?: (order: CertificateOrder) => void;
-  onDelete?: (order: CertificateOrder) => void;
 }) {
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<CertificateTimelineEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
 
-  const retryLabel = useMemo(() => {
-    if (!order) return '重试';
-    return getRetryActionLabel(order.status);
-  }, [order]);
 
   useEffect(() => {
     if (!open || !order) return;
@@ -119,7 +102,7 @@ export default function CertificateOrderDetailDialog({
           </Stack>
 
           {order.status === 'manual_dns_required' ? (
-            <Alert severity="warning">请根据下方 challenge 信息手动添加 TXT 记录，生效后点击“继续验证”。</Alert>
+            <Alert severity="warning">请根据下方 challenge 信息手动添加 TXT 记录，生效后可在列表操作区继续验证。</Alert>
           ) : null}
 
           {order.lastError ? <Alert severity="error">{order.lastError}</Alert> : null}
@@ -231,31 +214,6 @@ export default function CertificateOrderDetailDialog({
         <Button onClick={onClose} color="inherit">
           关闭
         </Button>
-        {onDelete ? (
-          (order.deployJobsCount || 0) > 0 ? (
-            <Tooltip title="该订单已绑定部署任务，无法删除">
-              <span>
-                <Button color="error" disabled>
-                  删除
-                </Button>
-              </span>
-            </Tooltip>
-          ) : (
-            <Button color="error" onClick={() => onDelete(order)} disabled={deleting}>
-              {deleting ? '删除中...' : '删除'}
-            </Button>
-          )
-        ) : null}
-        {order.canRetry && onRetry ? (
-          <Button variant="outlined" onClick={() => onRetry(order)} disabled={retrying}>
-            {retrying ? '处理中...' : retryLabel}
-          </Button>
-        ) : null}
-        {order.canDownload && onDownload ? (
-          <Button variant="contained" onClick={() => onDownload(order)} disabled={downloading}>
-            {downloading ? '下载中...' : '下载证书'}
-          </Button>
-        ) : null}
       </DialogActions>
     </Dialog>
   );

@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Stack,
   Table,
   TableBody,
@@ -15,13 +16,14 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Autorenew as CheckIcon,
-  DeleteOutline as DeleteIcon,
-  EditOutlined as EditIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { getDnsCredentials } from '@/services/dnsCredentials';
@@ -222,38 +224,50 @@ export default function CertificateAliasSection() {
                     <TableCell sx={{ minWidth: 220 }}>
                       <Typography variant="body2" color="text.secondary">{alias.lastError || '-'}</Typography>
                     </TableCell>
-                    <TableCell align="right" className="certificate-alias-sticky-action" sx={stickyBodyCellSx}>
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<CheckIcon />}
-                          onClick={() => handleCheck(alias)}
-                          disabled={checkingId === alias.id}
-                        >
-                          {checkingId === alias.id ? '检查中...' : '检查'}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<EditIcon />}
-                          onClick={() => {
-                            setEditingAlias(alias);
-                            setDialogOpen(true);
-                          }}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          startIcon={<DeleteIcon />}
-                          onClick={() => setDeleteTarget(alias)}
-                          disabled={deletingId === alias.id}
-                        >
-                          删除
-                        </Button>
+                    <TableCell
+                      align="right"
+                      className="certificate-alias-sticky-action"
+                      sx={{
+                        ...stickyBodyCellSx,
+                        minWidth: 132,
+                      }}
+                    >
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
+                        <Tooltip title={checkingId === alias.id ? '检查中...' : '检查'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleCheck(alias)}
+                              disabled={checkingId === alias.id}
+                            >
+                              {checkingId === alias.id ? <CircularProgress size={18} /> : <CheckIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title="编辑">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditingAlias(alias);
+                              setDialogOpen(true);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={deletingId === alias.id ? '删除中...' : '删除'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setDeleteTarget(alias)}
+                              disabled={deletingId === alias.id}
+                            >
+                              {deletingId === alias.id ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </Stack>
                     </TableCell>
                   </TableRow>

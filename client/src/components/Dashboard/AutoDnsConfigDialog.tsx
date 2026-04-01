@@ -14,8 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Domain, DNSRecord } from '@/types';
-import { createDNSRecord, getDNSRecords, updateDNSRecord } from '@/services/dns';
-import { findBestZone, normalizeHostname, toRelativeRecordName } from '@/utils/autoDns';
+import { findBestZone, toRelativeRecordName, upsertDnsRecordForZone } from '@/utils/autoDns';
 
 const PROVIDER_DISPLAY_NAME: Record<string, string> = {
   cloudflare: 'Cloudflare',
@@ -45,24 +44,6 @@ export type AutoDnsConfigRequest = {
     successText?: string;
     run: () => Promise<{ success?: boolean; message?: string } | void>;
   };
-};
-
-const toRecordFqdn = (record: DNSRecord, fallbackZoneName?: string): string => {
-  const recordName = String(record.name || '').trim().replace(/\.+$/, '');
-  const zoneName = String(record.zoneName || fallbackZoneName || '').trim().replace(/\.+$/, '');
-
-  if (!recordName) return normalizeHostname(zoneName);
-  if (recordName === '@') return normalizeHostname(zoneName);
-
-  const normalizedRecordName = normalizeHostname(recordName);
-  const normalizedZoneName = normalizeHostname(zoneName);
-
-  if (!normalizedZoneName) return normalizedRecordName;
-  if (normalizedRecordName === normalizedZoneName || normalizedRecordName.endsWith(`.${normalizedZoneName}`)) {
-    return normalizedRecordName;
-  }
-
-  return normalizeHostname(`${recordName}.${zoneName}`);
 };
 
 export default function AutoDnsConfigDialog({
@@ -131,43 +112,13 @@ export default function AutoDnsConfigDialog({
       if (!request) throw new Error('缺少自动配置请求');
       if (!selectedZone || typeof selectedZone.credentialId !== 'number') throw new Error('请选择目标域名');
 
-      const existingResp = await getDNSRecords(selectedZone.id, selectedZone.credentialId);
-      const existingRecords = existingResp.data?.records || [];
-      const expectedFqdn = normalizeHostname(request.fqdn);
-      const expectedValue = String(request.value || '').trim();
-      const existingRecord = existingRecords.find((record) => {
-        const sameName = toRecordFqdn(record, selectedZone.name) === expectedFqdn;
-        const sameType = String(record.type || '').trim().toUpperCase() === request.recordType;
-        if (!sameName || !sameType) return false;
-        if (request.recordType !== 'TXT') return true;
-        return String(record.content || '').trim() === expectedValue;
+      const result = await upsertDnsRecordForZone(selectedZone, {
+        recordType: request.recordType,
+        fqdn: request.fqdn,
+        value: request.value,
       });
-
-      const payload = {
-        type: request.recordType,
-        name: relativeRecordName || '@',
-        content: request.value,
-      };
-
-      let resp;
-      if (existingRecord?.id) {
-        setActionLabel('update');
-        resp = await updateDNSRecord(
-          selectedZone.id,
-          existingRecord.id,
-          payload,
-          selectedZone.credentialId
-        );
-      } else {
-        setActionLabel('create');
-        resp = await createDNSRecord(
-          selectedZone.id,
-          payload,
-          selectedZone.credentialId
-        );
-      }
-
-      return resp.data?.record || null;
+      setActionLabel(result.action);
+      return result.record || null;
     },
     onSuccess: async (record) => {
       setSubmitError(null);

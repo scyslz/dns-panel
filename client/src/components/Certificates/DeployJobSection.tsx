@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Stack,
   Table,
   TableBody,
@@ -15,11 +16,14 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
   CheckCircle as SuccessIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
   ErrorOutline as ErrorIcon,
   History as HistoryIcon,
   Pending as PendingIcon,
@@ -369,39 +373,50 @@ export default function DeployJobSection() {
                       className="certificate-deploy-job-sticky-action"
                       sx={{
                         ...stickyBodyCellSx,
-                        minWidth: 320,
+                        minWidth: 148,
                       }}
                     >
-                      <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="nowrap" sx={{ whiteSpace: 'nowrap' }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<HistoryIcon />}
-                          onClick={() => setHistoryJob(job)}
-                        >
-                          执行记录
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setEditingJob(job);
-                            setDialogOpen(true);
-                          }}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<RunIcon />}
-                          onClick={() => handleRun(job)}
-                          disabled={runningId === job.id}
-                        >
-                          {runningId === job.id ? '执行中...' : '手动执行'}
-                        </Button>
-                        <Button size="small" color="error" onClick={() => setDeleteJobRow(job)}>
-                          删除
-                        </Button>
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
+                        <Tooltip title="执行记录">
+                          <IconButton size="small" onClick={() => setHistoryJob(job)}>
+                            <HistoryIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="编辑">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditingJob(job);
+                              setDialogOpen(true);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={runningId === job.id ? '执行中...' : '手动执行'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleRun(job)}
+                              disabled={runningId === job.id}
+                            >
+                              {runningId === job.id ? <CircularProgress size={18} /> : <RunIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title={deletingId === job.id ? '删除中...' : '删除'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setDeleteJobRow(job)}
+                              disabled={deletingId === job.id}
+                            >
+                              {deletingId === job.id ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </Stack>
                     </TableCell>
                   </TableRow>

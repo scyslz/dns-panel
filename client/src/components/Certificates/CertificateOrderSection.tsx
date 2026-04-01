@@ -232,13 +232,7 @@ export default function CertificateOrderSection() {
       <CertificateOrderDetailDialog
         open={!!detailOrder}
         order={detailOrder}
-        retrying={retryingId === detailOrder?.id}
-        downloading={downloadingId === detailOrder?.id}
-        deleting={deletingId === detailOrder?.id}
         onClose={() => setDetailOrderId(null)}
-        onRetry={handleRetry}
-        onDownload={handleDownload}
-        onDelete={handleDelete}
       />
     </>
   );
