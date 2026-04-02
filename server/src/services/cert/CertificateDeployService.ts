@@ -3987,6 +3987,13 @@ export class CertificateDeployService {
     });
 
     await logDeploy(userId, source.primaryDomain, `job:create:${target.name}`, 'SUCCESS');
+    if (created.enabled && created.certificateDeployTarget?.enabled && EXECUTABLE_TARGET_TYPES.has(type)) {
+      setImmediate(() => {
+        void this.executeCreatedJobOnce(created.id).catch((error) => {
+          console.error('[certificate-deploy:create-job:auto-run]', error?.message || error);
+        });
+      });
+    }
     return mapJobRecord(created);
   }
 
@@ -4079,6 +4086,37 @@ export class CertificateDeployService {
     await this.executeJob(job.id, event, { triggerMode: 'manual', runId: run.id });
     const updated = await getJobForUser(userId, job.id);
     return mapJobRecord(updated);
+  }
+
+  private static async executeCreatedJobOnce(jobId: number) {
+    const run = await prisma.certificateDeployRun.create({
+      data: {
+        jobId,
+        event: 'certificate.issued',
+        triggerMode: 'manual',
+        status: 'running',
+        scheduledAt: new Date(),
+        startedAt: new Date(),
+      },
+    });
+
+    try {
+      await this.executeJob(jobId, 'certificate.issued', { triggerMode: 'manual', runId: run.id });
+    } catch (error: any) {
+      const message = error?.message || '部署任务执行失败';
+      await prisma.certificateDeployRun.updateMany({
+        where: { id: run.id, finishedAt: null },
+        data: { status: 'failed', finishedAt: new Date(), lastError: message },
+      });
+      await prisma.certificateDeployJob.updateMany({
+        where: { id: jobId },
+        data: {
+          lastStatus: 'failed',
+          lastError: message,
+          lastTriggeredAt: new Date(),
+        },
+      });
+    }
   }
 
   static async triggerJobsForOrder(orderId: number, event: CertificateDeployEvent) {

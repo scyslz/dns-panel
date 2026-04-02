@@ -75,6 +75,17 @@ router.post('/:id/retry', async (req: AuthRequest, res) => {
   }
 });
 
+router.delete('/:id', async (req: AuthRequest, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return errorResponse(res, '无效的订单 ID', 400);
+    const result = await VendorCertificateService.deleteOrder(req.user!.id, id);
+    return successResponse(res, result, '厂商证书订单已删除');
+  } catch (error: any) {
+    return errorResponse(res, error?.message || '删除厂商证书订单失败', 400);
+  }
+});
+
 router.get('/:id/download', async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id, 10);

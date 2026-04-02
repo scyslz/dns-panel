@@ -194,6 +194,11 @@ export async function retryVendorCertificateOrder(id: number): Promise<ApiRespon
   return response as unknown as ApiResponse<{ order: VendorCertificate }>;
 }
 
+export async function deleteVendorCertificateOrder(id: number): Promise<ApiResponse> {
+  const response = await api.delete(`/vendor-certificates/${id}`);
+  return response as unknown as ApiResponse;
+}
+
 export async function downloadVendorCertificateOrder(id: number): Promise<Blob> {
   const response = await api.get(`/vendor-certificates/${id}/download`, { responseType: 'blob' });
   return response as unknown as Blob;

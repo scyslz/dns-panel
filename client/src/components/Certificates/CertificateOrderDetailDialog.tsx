@@ -74,6 +74,8 @@ export default function CertificateOrderDetailDialog({
 
   if (!order) return null;
 
+  const shouldShowLastError = order.lastError && order.status !== 'waiting_dns_propagation';
+
   const handleCopy = async (value: string) => {
     if (!value) return;
     try {
@@ -105,7 +107,7 @@ export default function CertificateOrderDetailDialog({
             <Alert severity="warning">请根据下方 challenge 信息手动添加 TXT 记录，生效后可在列表操作区继续验证。</Alert>
           ) : null}
 
-          {order.lastError ? <Alert severity="error">{order.lastError}</Alert> : null}
+          {shouldShowLastError ? <Alert severity="error">{order.lastError}</Alert> : null}
 
           <Box
             sx={{

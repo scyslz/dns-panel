@@ -348,6 +348,7 @@ export interface VendorCertificate {
   updatedAt: string;
   canRetry: boolean;
   canDownload: boolean;
+  deployJobsCount?: number;
   vendorCredentialId?: number | null;
   validationDnsCredentialId?: number | null;
   vendorCredential?: CertificateOrderDnsCredential;

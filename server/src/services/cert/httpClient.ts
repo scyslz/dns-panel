@@ -8,6 +8,7 @@ interface RequestOptions {
   body?: string | Buffer;
   timeoutMs?: number;
   allowInsecureTls?: boolean;
+  agent?: http.Agent | https.Agent;
 }
 
 interface RequestResult {
@@ -37,6 +38,7 @@ export async function requestText(options: RequestOptions): Promise<RequestResul
         path: `${url.pathname}${url.search}`,
         method: options.method || 'GET',
         headers,
+        agent: options.agent,
         rejectUnauthorized: isHttps ? !options.allowInsecureTls : undefined,
       },
       (res) => {

@@ -247,6 +247,7 @@ function mapVendorOrderRecord(record: any) {
     updatedAt: record.updatedAt,
     canRetry: record.status !== 'issued',
     canDownload: record.status === 'issued' && certificateReady,
+    deployJobsCount: Number(record?._count?.deployJobs || 0),
     vendorCredentialId: record.vendorCredentialId ?? record.dnsCredentialId ?? vendorCredential?.id ?? null,
     validationDnsCredentialId: record.validationDnsCredentialId ?? record.dnsCredentialId ?? validationDnsCredential?.id ?? null,
     vendorCredential: summarizeCredential(vendorCredential),
@@ -594,6 +595,7 @@ export class VendorCertificateService {
     const records = await prisma.vendorCertificateOrder.findMany({
       where: { userId },
       include: {
+        _count: { select: { deployJobs: true } },
         legacyDnsCredential: { select: { id: true, name: true, provider: true, isDefault: true } },
         vendorCredential: { select: { id: true, name: true, provider: true, isDefault: true } },
         validationDnsCredential: { select: { id: true, name: true, provider: true, isDefault: true } },
@@ -605,7 +607,22 @@ export class VendorCertificateService {
   }
 
   static async getOrder(userId: number, id: number) {
-    const record = await getVendorOrderForUser(userId, id);
+    const record = await prisma.vendorCertificateOrder.findFirst({
+      where: { id, userId },
+      include: {
+        _count: { select: { deployJobs: true } },
+        legacyDnsCredential: {
+          select: { id: true, name: true, provider: true, isDefault: true },
+        },
+        vendorCredential: {
+          select: { id: true, name: true, provider: true, isDefault: true },
+        },
+        validationDnsCredential: {
+          select: { id: true, name: true, provider: true, isDefault: true },
+        },
+      },
+    });
+    if (!record) throw new Error('厂商证书订单不存在');
     return mapVendorOrderRecord(record);
   }
 
@@ -677,6 +694,34 @@ export class VendorCertificateService {
 
     await createVendorLog(userId, updated.primaryDomain, `vendor:retry:${updated.provider}`, 'SUCCESS');
     return mapVendorOrderRecord(updated);
+  }
+
+  static async deleteOrder(userId: number, id: number) {
+    const record = await prisma.vendorCertificateOrder.findFirst({
+      where: { id, userId },
+      include: {
+        _count: { select: { deployJobs: true } },
+      },
+    });
+    if (!record) throw new Error('厂商证书订单不存在');
+
+    const deployJobsCount = Number(record?._count?.deployJobs || 0);
+    if (deployJobsCount > 0) {
+      throw new Error('该厂商证书已绑定部署任务，无法删除，请先删除/解绑部署任务');
+    }
+
+    await prisma.vendorCertificateOrder.delete({ where: { id: record.id } });
+
+    await createLog({
+      userId,
+      action: 'DELETE',
+      resourceType: 'CERTIFICATE',
+      domain: record.primaryDomain,
+      recordName: `vendor:${record.provider}:delete`,
+      status: 'SUCCESS',
+    });
+
+    return { deleted: true };
   }
 
   static async buildDownloadZip(userId: number, id: number) {

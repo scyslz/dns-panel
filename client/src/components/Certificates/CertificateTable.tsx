@@ -128,6 +128,7 @@ export default function CertificateTable({
           {orders.map((order) => {
             const retryLabel = getRetryActionLabel(order.status);
             const hasDeployJobs = (order.deployJobsCount || 0) > 0;
+            const shouldShowLastError = order.lastError && order.status !== 'waiting_dns_propagation';
             const deleteTooltip = hasDeployJobs
               ? '该订单已绑定部署任务，无法删除'
               : (deletingId === order.id ? '删除中...' : '删除');
@@ -163,7 +164,7 @@ export default function CertificateTable({
                       label={getCertificateStatusLabel(order.status)}
                       sx={getCertificateStatusChipSx(getCertificateStatusColor(order.status))}
                     />
-                    {order.lastError ? (
+                    {shouldShowLastError ? (
                       <Tooltip title={order.lastError}>
                         <Typography variant="caption" color="error.main" sx={{ cursor: 'help' }}>
                           {order.lastError}

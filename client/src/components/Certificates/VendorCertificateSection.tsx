@@ -21,6 +21,7 @@ import {
 import {
   Add as AddIcon,
   Autorenew as RetryIcon,
+  Delete as DeleteIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   VisibilityOutlined as DetailIcon,
@@ -28,6 +29,7 @@ import {
 import { getDnsCredentials } from '@/services/dnsCredentials';
 import {
   createVendorCertificateOrder,
+  deleteVendorCertificateOrder,
   downloadVendorCertificateOrder,
   getVendorCertificateProviders,
   getVendorCertificates,
@@ -84,6 +86,7 @@ export default function VendorCertificateSection() {
   const [submitting, setSubmitting] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
 
   const loadData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -200,6 +203,28 @@ export default function VendorCertificateSection() {
     }
   };
 
+  const handleDelete = async (order: VendorCertificate) => {
+    if ((order.deployJobsCount || 0) > 0) {
+      setError('该厂商证书已绑定部署任务，无法删除，请先删除/解绑部署任务');
+      return;
+    }
+
+    const confirmed = window.confirm(`确定删除厂商证书订单 #${order.id}（${order.primaryDomain}）吗？此操作不可恢复。`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(order.id);
+      setError(null);
+      await deleteVendorCertificateOrder(order.id);
+      setSuccessMessage('厂商证书订单已删除');
+      await loadData({ silent: true });
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : (err?.message || '删除厂商证书订单失败'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleOpenDetail = (order: VendorCertificate) => {
     setDetailOrder(order);
   };
@@ -212,6 +237,11 @@ export default function VendorCertificateSection() {
   const handleDownloadClick = async (event: MouseEvent<HTMLButtonElement>, order: VendorCertificate) => {
     event.stopPropagation();
     await handleDownload(order);
+  };
+
+  const handleDeleteClick = async (event: MouseEvent<HTMLButtonElement>, order: VendorCertificate) => {
+    event.stopPropagation();
+    await handleDelete(order);
   };
 
   return (
@@ -315,14 +345,13 @@ export default function VendorCertificateSection() {
                     }}
                   >
                     <TableCell sx={{ minWidth: 220 }}>
-                      <Stack spacing={0.5}>
-                        <Typography variant="body1" fontWeight={600}>
-                          {order.primaryDomain}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {order.domains.join(', ')}
-                        </Typography>
-                      </Stack>
+                      <Typography
+                        variant="body1"
+                        fontWeight={600}
+                        sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
+                        {order.domains.join(', ') || order.primaryDomain}
+                      </Typography>
                     </TableCell>
                     <TableCell sx={{ minWidth: 140 }}>
                       <Typography variant="body1">{getVendorCertificateProviderLabel(order.provider)}</Typography>
@@ -363,7 +392,7 @@ export default function VendorCertificateSection() {
                       className="certificate-vendor-sticky-action"
                       sx={{
                         ...stickyBodyCellSx,
-                        minWidth: 132,
+                        minWidth: 172,
                       }}
                     >
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
@@ -406,6 +435,18 @@ export default function VendorCertificateSection() {
                             </span>
                           </Tooltip>
                         ) : null}
+                        <Tooltip title={(order.deployJobsCount || 0) > 0 ? '已绑定部署任务，无法删除' : (deletingId === order.id ? '删除中...' : '删除')}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(event) => handleDeleteClick(event, order)}
+                              disabled={deletingId === order.id || (order.deployJobsCount || 0) > 0}
+                            >
+                              {deletingId === order.id ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </Stack>
                     </TableCell>
                   </TableRow>

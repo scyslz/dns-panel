@@ -60,6 +60,42 @@ import { certificateTableSx, certificateToolbarSx, certificateDialogActionsSx, g
 import DeployJobDialog from './DeployJobDialog';
 import DeployJobRunHistoryDialog from './DeployJobRunHistoryDialog';
 
+const deployJobColumnSx = {
+  certificate: { width: '17%', minWidth: 168 },
+  target: { width: '15%', minWidth: 156 },
+  binding: { width: '13%', minWidth: 144 },
+  trigger: { width: '17%', minWidth: 176 },
+  status: { width: '9%', minWidth: 104 },
+  lastTriggered: { width: '12%', minWidth: 132 },
+  lastSucceeded: { width: '12%', minWidth: 132 },
+  action: { width: 148, minWidth: 148 },
+} as const;
+
+const deployJobCompactLineSx = {
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+} as const;
+
+const deployJobBindingTextSx = {
+  wordBreak: 'break-word',
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+} as const;
+
+const deployJobTableSx = {
+  minWidth: 1120,
+  tableLayout: 'fixed',
+  '& .MuiTableCell-root': {
+    px: 1.25,
+  },
+  '& .MuiTableCell-head': {
+    py: 1.5,
+  },
+} as const;
+
 function getStatusColor(status?: string | null): 'default' | 'success' | 'warning' | 'error' {
   switch (status) {
     case 'success':
@@ -124,9 +160,9 @@ export default function DeployJobSection() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const [jobsRes, targetsRes, ordersRes, typesRes, vendorOrdersRes] = await Promise.all([
         getDeployJobs(),
@@ -143,7 +179,7 @@ export default function DeployJobSection() {
     } catch (err: any) {
       setError(typeof err === 'string' ? err : (err?.message || '加载部署任务失败'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -162,24 +198,56 @@ export default function DeployJobSection() {
         summarizeDeployJobBinding(job),
         getTriggerLabel(job),
         job.lastStatus,
-        job.lastError,
       ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch))
     );
   }, [jobs, normalizedSearch, targetTypes]);
+  const hasRunningJobs = useMemo(
+    () => jobs.some((job) => job.lastStatus === 'running'),
+    [jobs]
+  );
+
+  useEffect(() => {
+    if (!hasRunningJobs) return;
+    const timer = window.setInterval(() => {
+      loadData({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningJobs, loadData]);
 
   const handleSubmit = async (payload: UpsertDeployJobInput) => {
     try {
       setSubmitting(true);
+      let shouldReloadImmediately = Boolean(editingJob);
       if (editingJob) {
         await updateDeployJob(editingJob.id, payload);
         setSuccessMessage('部署任务已更新');
       } else {
-        await createDeployJob(payload);
+        const response = await createDeployJob(payload);
+        const createdJob = response.data?.job;
+        if (createdJob) {
+          const optimisticRunning =
+            createdJob.enabled && createdJob.target?.enabled
+              ? {
+                  ...createdJob,
+                  lastStatus: 'running',
+                  lastError: null,
+                  lastTriggeredAt: new Date().toISOString(),
+                }
+              : createdJob;
+          setJobs((prev) => [optimisticRunning, ...prev.filter((job) => job.id !== optimisticRunning.id)]);
+        } else {
+          shouldReloadImmediately = true;
+        }
         setSuccessMessage('部署任务已创建');
+        window.setTimeout(() => {
+          void loadData({ silent: true });
+        }, 1200);
       }
       setDialogOpen(false);
       setEditingJob(null);
-      await loadData();
+      if (shouldReloadImmediately) {
+        await loadData({ silent: true });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -270,20 +338,20 @@ export default function DeployJobSection() {
             <Table
               size="small"
               sx={{
-                minWidth: 1180,
                 ...certificateTableSx,
+                ...deployJobTableSx,
               }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell>证书</TableCell>
-                  <TableCell>目标</TableCell>
-                  <TableCell>绑定</TableCell>
-                  <TableCell>自动触发</TableCell>
-                  <TableCell>状态</TableCell>
-                  <TableCell>最近执行</TableCell>
-                  <TableCell>最近成功</TableCell>
-                  <TableCell align="right" sx={stickyHeaderCellSx}>操作</TableCell>
+                  <TableCell sx={deployJobColumnSx.certificate}>证书</TableCell>
+                  <TableCell sx={deployJobColumnSx.target}>目标</TableCell>
+                  <TableCell sx={deployJobColumnSx.binding}>绑定</TableCell>
+                  <TableCell sx={deployJobColumnSx.trigger}>自动触发</TableCell>
+                  <TableCell sx={deployJobColumnSx.status}>状态</TableCell>
+                  <TableCell sx={deployJobColumnSx.lastTriggered}>最近执行</TableCell>
+                  <TableCell sx={deployJobColumnSx.lastSucceeded}>最近成功</TableCell>
+                  <TableCell align="right" sx={{ ...stickyHeaderCellSx, ...deployJobColumnSx.action }}>操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -297,12 +365,12 @@ export default function DeployJobSection() {
                       },
                     }}
                   >
-                    <TableCell sx={{ minWidth: 220 }}>
+                    <TableCell sx={deployJobColumnSx.certificate}>
                       <Stack spacing={0.5}>
-                        <Typography variant="body1" fontWeight={600}>
+                        <Typography variant="body1" fontWeight={600} sx={{ wordBreak: 'break-word' }}>
                           {getDeployJobSourceLabel(job)}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={deployJobCompactLineSx}>
                           {job.sourceType === 'vendor'
                             ? `厂商订单 #${job.vendorCertificateOrderId || '-'}`
                             : `订单 #${job.certificateOrderId || '-'}`
@@ -310,30 +378,30 @@ export default function DeployJobSection() {
                         </Typography>
                       </Stack>
                     </TableCell>
-                    <TableCell sx={{ minWidth: 200 }}>
+                    <TableCell sx={deployJobColumnSx.target}>
                       <Stack spacing={0.5}>
-                        <Typography variant="body1" fontWeight={500}>
+                        <Typography variant="body1" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
                           {job.target?.name || `#${job.certificateDeployTargetId}`}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={deployJobCompactLineSx}>
                           {getDeployTargetTypeLabel(job.target?.type, targetTypes)}
                         </Typography>
                       </Stack>
                     </TableCell>
-                    <TableCell sx={{ maxWidth: 180 }}>
-                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                    <TableCell sx={deployJobColumnSx.binding}>
+                      <Typography variant="body2" sx={deployJobBindingTextSx}>
                         {summarizeDeployJobBinding(job)}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={deployJobColumnSx.trigger}>
                       <Stack spacing={0.5}>
-                        <Typography variant="body1">{getTriggerLabel(job)}</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body1" sx={deployJobCompactLineSx}>{getTriggerLabel(job)}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={deployJobCompactLineSx}>
                           {job.enabled ? '任务已启用' : '任务已停用'}
                         </Typography>
                       </Stack>
                     </TableCell>
-                    <TableCell sx={{ minWidth: 160 }}>
+                    <TableCell sx={deployJobColumnSx.status}>
                       <Stack spacing={0.75} alignItems="flex-start">
                         <Chip
                           size="small"
@@ -341,28 +409,23 @@ export default function DeployJobSection() {
                           label={getDeployJobStatusLabel(job.lastStatus)}
                           sx={getCertificateStatusChipSx(getStatusColor(job.lastStatus))}
                         />
-                        {job.lastError ? (
-                          <Typography variant="body2" color="error.main" sx={{ wordBreak: 'break-word' }}>
-                            {job.lastError}
-                          </Typography>
-                        ) : null}
                       </Stack>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={deployJobColumnSx.lastTriggered}>
                       {job.lastTriggeredAt ? (
                         <Stack spacing={0.25}>
-                          <Typography variant="body1">{formatRelativeTime(job.lastTriggeredAt)}</Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body1" sx={deployJobCompactLineSx}>{formatRelativeTime(job.lastTriggeredAt)}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={deployJobCompactLineSx}>
                             {formatDateTime(job.lastTriggeredAt)}
                           </Typography>
                         </Stack>
                       ) : '-'}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={deployJobColumnSx.lastSucceeded}>
                       {job.lastSucceededAt ? (
                         <Stack spacing={0.25}>
-                          <Typography variant="body1">{formatRelativeTime(job.lastSucceededAt)}</Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body1" sx={deployJobCompactLineSx}>{formatRelativeTime(job.lastSucceededAt)}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={deployJobCompactLineSx}>
                             {formatDateTime(job.lastSucceededAt)}
                           </Typography>
                         </Stack>
@@ -373,7 +436,7 @@ export default function DeployJobSection() {
                       className="certificate-deploy-job-sticky-action"
                       sx={{
                         ...stickyBodyCellSx,
-                        minWidth: 148,
+                        ...deployJobColumnSx.action,
                       }}
                     >
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="nowrap">
