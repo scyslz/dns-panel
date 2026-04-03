@@ -130,6 +130,44 @@ export class CloudflareService {
     return payload?.result ?? payload;
   }
 
+  private async requestApiRaw(
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    path: string,
+    opts?: {
+      query?: Record<string, string | number | boolean | undefined>;
+      body?: any;
+    }
+  ): Promise<any> {
+    const base = 'https://api.cloudflare.com/client/v4';
+    const url = new URL(`${base}${path}`);
+
+    Object.entries(opts?.query || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      url.searchParams.set(key, String(value));
+    });
+
+    const response = await fetch(url.toString(), {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    });
+
+    const payload: any = await response.json().catch(() => null);
+    if (!response.ok || payload?.success === false) {
+      const err = new Error(
+        payload?.errors?.[0]?.message || payload?.messages?.[0]?.message || payload?.message || response.statusText || '未知错误'
+      );
+      (err as any).status = response.status;
+      (err as any).errors = Array.isArray(payload?.errors) ? payload.errors : [];
+      throw err;
+    }
+
+    return payload?.result ?? payload;
+  }
+
   /**
    * 验证 Token 有效性
    */
@@ -243,7 +281,15 @@ export class CloudflareService {
         id: zone.id,
         name: zone.name,
         status: zone.status || 'active',
+        type: typeof zone?.type === 'string' ? zone.type : undefined,
         updatedAt: zone.modified_on,
+        nameServers: Array.isArray(zone?.name_servers)
+          ? zone.name_servers.filter((item: any) => typeof item === 'string')
+          : undefined,
+        vanityNameServers: Array.isArray(zone?.vanity_name_servers)
+          ? zone.vanity_name_servers.filter((item: any) => typeof item === 'string')
+          : undefined,
+        activatedOn: typeof zone?.activated_on === 'string' ? zone.activated_on : undefined,
       }));
 
       cache.set(cacheKey, domains, config.cache.domainsTTL);
@@ -525,6 +571,64 @@ export class CloudflareService {
       return response.result || [];
     } catch (error: any) {
       const err = new Error(`获取自定义主机名失败: ${error.message}`);
+      (err as any).status = error?.status || error?.statusCode;
+      throw err;
+    }
+  }
+
+  async getCustomHostnameByHostname(zoneId: string, hostname: string): Promise<any | null> {
+    const target = this.normalizeHostname(hostname);
+    if (!target) return null;
+    const items = await this.getCustomHostnames(zoneId);
+    return items.find((item: any) => this.normalizeHostname(item?.hostname) === target) || null;
+  }
+
+  async createCustomHostnameWithCertificate(
+    zoneId: string,
+    input: {
+      hostname: string;
+      certificate: string;
+      privateKey: string;
+      customOriginServer?: string;
+    }
+  ): Promise<any> {
+    try {
+      return await this.requestApiRaw('POST', `/zones/${zoneId}/custom_hostnames`, {
+        body: {
+          hostname: input.hostname,
+          ...(input.customOriginServer ? { custom_origin_server: input.customOriginServer } : {}),
+          ssl: {
+            custom_certificate: input.certificate,
+            custom_key: input.privateKey,
+          },
+        },
+      });
+    } catch (error: any) {
+      const err = new Error(`创建自定义主机名证书失败: ${error?.message || String(error)}`);
+      (err as any).status = error?.status || error?.statusCode;
+      throw err;
+    }
+  }
+
+  async updateCustomHostnameCertificate(
+    zoneId: string,
+    customHostnameId: string,
+    input: {
+      certificate: string;
+      privateKey: string;
+    }
+  ): Promise<any> {
+    try {
+      return await this.requestApiRaw('PATCH', `/zones/${zoneId}/custom_hostnames/${customHostnameId}`, {
+        body: {
+          ssl: {
+            custom_certificate: input.certificate,
+            custom_key: input.privateKey,
+          },
+        },
+      });
+    } catch (error: any) {
+      const err = new Error(`更新自定义主机名证书失败: ${error?.message || String(error)}`);
       (err as any).status = error?.status || error?.statusCode;
       throw err;
     }

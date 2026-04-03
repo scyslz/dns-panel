@@ -33,6 +33,7 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
@@ -52,6 +53,7 @@ import {
   AccessTime as AccessTimeIcon,
   Event as EventIcon,
   CloudQueue as CloudflareIcon,
+  CloudQueue as UcloudIcon,
   Storage as AliyunIcon,
   Language as DnspodIcon,
   Cloud as HuaweiIcon,
@@ -65,13 +67,15 @@ import {
   PowerSettingsNew as PowerdnsIcon,
   RocketLaunch as SpaceshipIcon,
   Security as EsaIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { deleteZone, getDomains, refreshDomains } from '@/services/domains';
 import { deleteEsaSite, ESA_SUPPORTED_REGIONS, listEsaSites, updateEsaSitePause, updateEsaSiteTags } from '@/services/aliyunEsa';
 import { getStoredUser } from '@/services/auth';
-import { lookupDomainExpiry } from '@/services/domainExpiry';
+import { lookupDomainExpiry, setDomainExpiryOverride, deleteDomainExpiryOverride, type DomainExpirySource } from '@/services/domainExpiry';
 import { formatRelativeTime } from '@/utils/formatters';
 import { alpha } from '@mui/material/styles';
+import dayjs from 'dayjs';
 import { Domain } from '@/types';
 import { ProviderType } from '@/types/dns';
 import DnsManagement from '@/components/DnsManagement/DnsManagement';
@@ -90,6 +94,7 @@ const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: stri
   aliyun: { icon: <AliyunIcon />, color: '#ff6a00', name: '阿里云' },
   dnspod: { icon: <DnspodIcon />, color: '#0052d9', name: '腾讯云' },
   dnspod_token: { icon: <DnspodIcon />, color: '#0052d9', name: '腾讯云' },
+  ucloud: { icon: <UcloudIcon />, color: '#2563eb', name: 'UCloud' },
   huawei: { icon: <HuaweiIcon />, color: '#e60012', name: '华为云' },
   baidu: { icon: <BaiduIcon />, color: '#2932e1', name: '百度云' },
   west: { icon: <WestIcon />, color: '#1e88e5', name: '西部数码' },
@@ -524,8 +529,11 @@ export default function Dashboard() {
   };
 
   const domains: Domain[] = data?.data?.domains || [];
+  const storedUser = getStoredUser();
+  const showNonAuthoritativeDomains = storedUser?.showNonAuthoritativeDomains === true;
   const filteredDomains = domains.filter((domain) =>
-    domain.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (showNonAuthoritativeDomains || domain.authorityStatus !== 'non_authoritative')
+    && domain.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const maxPage = Math.max(0, Math.ceil(filteredDomains.length / rowsPerPage) - 1);
@@ -542,14 +550,14 @@ export default function Dashboard() {
     return filteredDomains.slice(start, end);
   }, [filteredDomains, page, rowsPerPage]);
 
-  const expiryDisplayMode = getStoredUser()?.domainExpiryDisplayMode === 'days' ? 'days' : 'date';
+  const expiryDisplayMode = storedUser?.domainExpiryDisplayMode === 'days' ? 'days' : 'date';
   const expiryLabel = expiryDisplayMode === 'date' ? '到期日期' : '剩余天数';
   const expiryLookupDomains = useMemo(
     () => Array.from(new Set(pagedDomains.map(d => d.name.toLowerCase()))),
     [pagedDomains]
   );
 
-  const { data: expiryData } = useQuery({
+  const { data: expiryData, refetch: refetchExpiry } = useQuery({
     queryKey: ['domain-expiry', expiryLookupDomains],
     queryFn: () => lookupDomainExpiry(expiryLookupDomains),
     enabled: expiryLookupDomains.length > 0,
@@ -557,22 +565,25 @@ export default function Dashboard() {
   });
 
   const expiryByDomain = useMemo(() => {
-    const map = new Map<string, string | undefined>();
+    const map = new Map<string, { expiresAt?: string; source: DomainExpirySource }>();
     const list = (expiryData as any)?.data?.results || [];
     list.forEach((r: any) => {
       const domain = typeof r?.domain === 'string' ? r.domain.toLowerCase() : '';
       const expiresAt = typeof r?.expiresAt === 'string' ? r.expiresAt : undefined;
-      if (domain) map.set(domain, expiresAt);
+      const rawSource = typeof r?.source === 'string' ? r.source : '';
+      const source: DomainExpirySource =
+        rawSource === 'rdap' || rawSource === 'whois' || rawSource === 'manual' ? rawSource : 'unknown';
+      if (domain) map.set(domain, { expiresAt, source });
     });
     return map;
   }, [expiryData]);
 
   const formatExpiryValue = (domainName: string): string => {
     const key = String(domainName || '').trim().toLowerCase();
-    const expiresAt = expiryByDomain.get(key);
-    if (!expiresAt) return '-';
+    const entry = expiryByDomain.get(key);
+    if (!entry?.expiresAt) return '-';
 
-    const datePart = expiresAt.slice(0, 10);
+    const datePart = entry.expiresAt.slice(0, 10);
     if (expiryDisplayMode === 'date') return datePart;
 
     const expiresMs = Date.parse(`${datePart}T00:00:00Z`);
@@ -616,6 +627,19 @@ export default function Dashboard() {
     }
 
     return { label: raw || '-', color: 'default' as const, icon: null };
+  };
+
+  const getAuthorityConfig = (status?: Domain['authorityStatus']) => {
+    if (status === 'non_authoritative') {
+      return { label: '非权威', color: 'default' as const };
+    }
+    if (status === 'pending') {
+      return { label: '待接入', color: 'warning' as const };
+    }
+    if (!status || status === 'unknown') {
+      return { label: '待识别', color: 'default' as const };
+    }
+    return null;
   };
 
   const getEsaAccessTypeLabel = (accessType?: string): string | null => {
@@ -694,6 +718,10 @@ export default function Dashboard() {
   const [esaDeleteSite, setEsaDeleteSite] = useState<Domain | null>(null);
   const [esaDeleteConfirmInput, setEsaDeleteConfirmInput] = useState('');
   const [esaDeleteError, setEsaDeleteError] = useState<string | null>(null);
+  const [expiryEditOpen, setExpiryEditOpen] = useState(false);
+  const [expiryEditDomain, setExpiryEditDomain] = useState<string>('');
+  const [expiryEditDate, setExpiryEditDate] = useState<string>('');
+  const [expiryEditError, setExpiryEditError] = useState<string | null>(null);
 
   const getDomainCredentialName = (domain: Domain) => {
     if (typeof domain.credentialId === 'number') {
@@ -804,6 +832,31 @@ export default function Dashboard() {
     },
   });
 
+  const expiryOverrideMutation = useMutation({
+    mutationFn: async (payload: { domain: string; expiresAt: string }) =>
+      setDomainExpiryOverride(payload.domain, payload.expiresAt),
+    onSuccess: () => {
+      setExpiryEditOpen(false);
+      setExpiryEditError(null);
+      refetchExpiry();
+    },
+    onError: (err: any) => {
+      setExpiryEditError(err?.message ? String(err.message) : String(err));
+    },
+  });
+
+  const expiryOverrideDeleteMutation = useMutation({
+    mutationFn: async (domain: string) => deleteDomainExpiryOverride(domain),
+    onSuccess: () => {
+      setExpiryEditOpen(false);
+      setExpiryEditError(null);
+      refetchExpiry();
+    },
+    onError: (err: any) => {
+      setExpiryEditError(err?.message ? String(err.message) : String(err));
+    },
+  });
+
   const openEsaMenu = (e: ReactMouseEvent<HTMLElement>, domain: Domain) => {
     e.stopPropagation();
     setEsaMenuAnchor(e.currentTarget);
@@ -909,6 +962,29 @@ export default function Dashboard() {
     esaUpdateTagsMutation.mutate({ site: esaTagsSite, tags });
   };
 
+  const openExpiryEditDialog = (domainName: string) => {
+    const key = domainName.toLowerCase();
+    const current = expiryByDomain.get(key);
+    setExpiryEditDomain(domainName);
+    setExpiryEditDate(current?.expiresAt ? current.expiresAt.slice(0, 10) : '');
+    setExpiryEditError(null);
+    setExpiryEditOpen(true);
+  };
+
+  const closeExpiryEditDialog = () => {
+    if (expiryOverrideMutation.isPending || expiryOverrideDeleteMutation.isPending) return;
+    setExpiryEditOpen(false);
+    setExpiryEditError(null);
+  };
+
+  const saveExpiryOverride = () => {
+    if (!expiryEditDomain || !expiryEditDate) return;
+    expiryOverrideMutation.mutate({
+      domain: expiryEditDomain,
+      expiresAt: `${expiryEditDate}T00:00:00.000Z`,
+    });
+  };
+
   const openZoneMenu = (e: ReactMouseEvent<HTMLElement>, domain: Domain) => {
     e.stopPropagation();
     setZoneMenuAnchor(e.currentTarget);
@@ -947,6 +1023,7 @@ export default function Dashboard() {
     <Stack spacing={2}>
       {pagedDomains.map((domain) => {
         const status = getStatusConfig(domain.status);
+        const authority = !isEsaPanel ? getAuthorityConfig(domain.authorityStatus) : null;
         const rowKey = `${domain.id}-${domain.credentialId}`;
         const isExpanded = expandedDomainKey === rowKey;
         const detailPath = typeof domain.credentialId === 'number'
@@ -980,7 +1057,7 @@ export default function Dashboard() {
                     )}
                   </Stack>
                   <Stack direction="row" spacing={1} alignItems="center">
-                     <Chip
+                      <Chip
                         icon={status.icon || undefined}
                         label={status.label}
                         color={status.color === 'default' ? 'default' : status.color}
@@ -999,6 +1076,16 @@ export default function Dashboard() {
                           '& .MuiChip-icon': { color: 'inherit' }
                         }}
                       />
+                      {authority && (
+                        <Chip
+                          size="small"
+                          label={authority.label}
+                          color={authority.color}
+                          variant="outlined"
+                          title={domain.authorityReason || authority.label}
+                          sx={{ height: 24, fontSize: '0.75rem', borderStyle: 'dashed' }}
+                        />
+                      )}
                       {showAccountColumn && (
                         <Chip
                           size="small"
@@ -1090,6 +1177,16 @@ export default function Dashboard() {
                   <Typography variant="caption">
                     {expiryLabel}: {formatExpiryValue(domain.name)}
                   </Typography>
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0.25 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openExpiryEditDialog(domain.name);
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
                 </Stack>
               )}
             </CardContent>
@@ -1151,6 +1248,7 @@ export default function Dashboard() {
         <TableBody>
           {pagedDomains.map((domain) => {
             const status = getStatusConfig(domain.status);
+            const authority = !isEsaPanel ? getAuthorityConfig(domain.authorityStatus) : null;
             const rowKey = `${domain.id}-${domain.credentialId}`;
             const isExpanded = expandedDomainKey === rowKey;
             const detailPath = typeof domain.credentialId === 'number'
@@ -1302,29 +1400,55 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <TableCell>
-                        <Chip
-                          icon={status.icon || undefined}
-                          label={status.label}
-                          color={status.color === 'default' ? 'default' : status.color}
-                          size="small"
-                          sx={{
-                            bgcolor: (theme) => status.color !== 'default'
-                              ? alpha(theme.palette[status.color as 'success' | 'warning' | 'error'].main, 0.1)
-                              : undefined,
-                            color: (theme) => status.color !== 'default'
-                              ? theme.palette[status.color as 'success' | 'warning' | 'error'].dark
-                              : undefined,
-                            fontWeight: 600,
-                            border: 'none',
-                            '& .MuiChip-icon': { color: 'inherit' }
-                          }}
-                        />
+                        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                          <Chip
+                            icon={status.icon || undefined}
+                            label={status.label}
+                            color={status.color === 'default' ? 'default' : status.color}
+                            size="small"
+                            sx={{
+                              bgcolor: (theme) => status.color !== 'default'
+                                ? alpha(theme.palette[status.color as 'success' | 'warning' | 'error'].main, 0.1)
+                                : undefined,
+                              color: (theme) => status.color !== 'default'
+                                ? theme.palette[status.color as 'success' | 'warning' | 'error'].dark
+                                : undefined,
+                              fontWeight: 600,
+                              border: 'none',
+                              '& .MuiChip-icon': { color: 'inherit' }
+                            }}
+                          />
+                          {authority && (
+                            <Chip
+                              size="small"
+                              label={authority.label}
+                              color={authority.color}
+                              variant="outlined"
+                              title={domain.authorityReason || authority.label}
+                              sx={{ borderStyle: 'dashed' }}
+                            />
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
                         {domain.updatedAt ? formatRelativeTime(domain.updatedAt) : '-'}
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
-                        {formatExpiryValue(domain.name)}
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Typography variant="body2" color="inherit">
+                            {formatExpiryValue(domain.name)}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            sx={{ p: 0.5 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openExpiryEditDialog(domain.name);
+                            }}
+                          >
+                            <EditIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Stack>
                       </TableCell>
                       <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                         <IconButton
@@ -1721,6 +1845,77 @@ export default function Dashboard() {
             variant="contained"
           >
             {deleteMutation.isPending ? '删除中...' : '删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={expiryEditOpen} onClose={closeExpiryEditDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>设置域名到期时间</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              域名：<strong>{expiryEditDomain || '-'}</strong>
+            </Typography>
+            <DatePicker
+              key={`${expiryEditDomain}:${expiryEditOpen ? 'open' : 'closed'}`}
+              label="到期日期"
+              format="YYYY-MM-DD"
+              defaultValue={expiryEditDate ? dayjs(expiryEditDate) : null}
+              onChange={(value) => {
+                if (!value || !value.isValid()) {
+                  setExpiryEditDate('');
+                  return;
+                }
+                setExpiryEditDate(value.format('YYYY-MM-DD'));
+              }}
+              enableAccessibleFieldDOMStructure={false}
+              slotProps={{
+                field: { clearable: true },
+                calendarHeader: { format: 'YYYY-MM' },
+                textField: {
+                  fullWidth: true,
+                  size: 'small',
+                  disabled: expiryOverrideMutation.isPending || expiryOverrideDeleteMutation.isPending,
+                  placeholder: 'YYYY-MM-DD',
+                },
+              }}
+            />
+            {expiryEditError && <Alert severity="error">{expiryEditError}</Alert>}
+            {expiryByDomain.get(expiryEditDomain.toLowerCase())?.source === 'manual' && (
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={() => expiryOverrideDeleteMutation.mutate(expiryEditDomain)}
+                disabled={
+                  !expiryEditDomain
+                  || expiryOverrideMutation.isPending
+                  || expiryOverrideDeleteMutation.isPending
+                }
+              >
+                清除手动设置
+              </Button>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={closeExpiryEditDialog}
+            disabled={expiryOverrideMutation.isPending || expiryOverrideDeleteMutation.isPending}
+            color="inherit"
+          >
+            取消
+          </Button>
+          <Button
+            onClick={saveExpiryOverride}
+            disabled={
+              !expiryEditDomain
+              || !expiryEditDate
+              || expiryOverrideMutation.isPending
+              || expiryOverrideDeleteMutation.isPending
+            }
+            variant="contained"
+          >
+            {expiryOverrideMutation.isPending ? '保存中...' : '保存'}
           </Button>
         </DialogActions>
       </Dialog>

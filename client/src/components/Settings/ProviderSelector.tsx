@@ -26,6 +26,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   aliyun: '#ff6a00',
   dnspod: '#0052d9',
   dnspod_token: '#0052d9',
+  ucloud: '#0066ff',
   huawei: '#e60012',
   baidu: '#2932e1',
   west: '#1e88e5',
@@ -50,6 +51,8 @@ export const getProviderIcon = (type: string, size: 'small' | 'large' = 'large')
     case 'dnspod':
     case 'dnspod_token':
       return <Language fontSize={fontSize} sx={sx} />;
+    case 'ucloud':
+      return <CloudQueue fontSize={fontSize} sx={sx} />;
     case 'huawei':
       return <Cloud fontSize={fontSize} sx={sx} />;
     case 'baidu':

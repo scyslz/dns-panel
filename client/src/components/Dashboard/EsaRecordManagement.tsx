@@ -57,6 +57,9 @@ import {
   type EsaDnsRecord,
   type EsaRatePlanInstance,
 } from '@/services/aliyunEsa';
+import { useProvider } from '@/contexts/ProviderContext';
+import AutoDnsConfigDialog, { type AutoDnsConfigRequest } from './AutoDnsConfigDialog';
+import { findMatchingCandidateZones, pickSilentAutoDnsCandidate, upsertDnsRecordForZone } from '@/utils/autoDns';
 
 function normalizeRecordName(input: string, siteName: string): string {
   const raw = String(input || '').trim().replace(/\.$/, '');
@@ -109,6 +112,7 @@ const BIZ_NAME_OPTIONS: Array<{ value: string; label: string; help: string }> = 
   { value: 'image_video', label: 'Image/Video（图像/视频）', help: '图片/视频等大对象加速' },
 ];
 
+const DEFAULT_ESA_TTL = '1';
 const esaMetaChipSx = { height: 22, fontSize: '0.72rem' } as const;
 
 type CertificateTypeOption = { value: string; label: string; disabled?: boolean };
@@ -129,9 +133,11 @@ function getCnameStatusLabel(status?: string): { label: string; color: 'default'
 function getHttpsStatusLabel(status?: string): { label: string; color: 'default' | 'success' | 'warning' | 'error' } {
   const s = String(status || '').trim().toLowerCase();
   if (!s) return { label: '未知', color: 'default' };
-  if (s === 'configured') return { label: '已配置', color: 'success' };
+  if (s === 'configured' || s === 'ok' || s === 'issued' || s === 'active') return { label: '已配置', color: 'success' };
   if (s === 'applying') return { label: '申请中', color: 'warning' };
-  if (s === 'failed') return { label: '失败', color: 'error' };
+  if (s === 'expiring') return { label: '即将过期', color: 'warning' };
+  if (s === 'failed' || s === 'applyfailed' || s === 'expired') return { label: s === 'expired' ? '已过期' : '失败', color: 'error' };
+  if (s === 'canceled') return { label: '已取消', color: 'default' };
   if (s === 'none') return { label: '未配置', color: 'default' };
   return { label: status || '-', color: 'default' };
 }
@@ -158,6 +164,7 @@ export default function EsaRecordManagement({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const queryClient = useQueryClient();
+  const { credentials: allDnsCredentials } = useProvider();
 
   const normalizedAccessType = String(accessType || '').trim().toUpperCase();
   const isCnameAccess = normalizedAccessType === 'CNAME';
@@ -255,7 +262,9 @@ export default function EsaRecordManagement({
   const [mobileEditingRecordId, setMobileEditingRecordId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [cnameGuide, setCnameGuide] = useState<{ recordName: string; recordCname: string } | null>(null);
+  const [autoDnsRequest, setAutoDnsRequest] = useState<AutoDnsConfigRequest | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isCheckingAutoDns, setIsCheckingAutoDns] = useState(false);
   const [httpsDialog, setHttpsDialog] = useState<{ recordName: string; recordId: string } | null>(null);
   const [certType, setCertType] = useState<string>('lets_encrypt');
   const [applyResult, setApplyResult] = useState<EsaCertificateApplyResult | null>(null);
@@ -265,7 +274,7 @@ export default function EsaRecordManagement({
   const [host, setHost] = useState('');
   const [type, setType] = useState<string>('A/AAAA');
   const [value, setValue] = useState('');
-  const [ttl, setTtl] = useState<string>('30');
+  const [ttl, setTtl] = useState<string>(DEFAULT_ESA_TTL);
   const [proxied, setProxied] = useState(false);
   const [comment, setComment] = useState('');
   const [priority, setPriority] = useState<string>('');
@@ -433,7 +442,7 @@ export default function EsaRecordManagement({
     setHost('');
     setType('A/AAAA');
     setValue('');
-    setTtl('30');
+    setTtl(DEFAULT_ESA_TTL);
     setProxied(isCnameAccess ? true : false);
     setComment('');
     setPriority('');
@@ -450,7 +459,7 @@ export default function EsaRecordManagement({
     setHost(toDisplayHost(r.recordName, siteName));
     setType(r.type || 'A/AAAA');
     setValue(dataValue === '-' ? '' : dataValue);
-    setTtl(r.ttl !== undefined && r.ttl !== null ? String(r.ttl) : '30');
+    setTtl(r.ttl !== undefined && r.ttl !== null ? String(r.ttl) : DEFAULT_ESA_TTL);
     setProxied(isCnameAccess ? true : !!r.proxied);
     setComment(r.comment || '');
     setPriority(typeof dataPriority === 'number' && Number.isFinite(dataPriority) ? String(dataPriority) : '');
@@ -495,6 +504,14 @@ export default function EsaRecordManagement({
   const closeCnameGuide = () => {
     setCnameGuide(null);
     setCopiedKey(null);
+  };
+
+  const closeAutoDnsDialog = (configured: boolean) => {
+    const fallback = autoDnsRequest;
+    setAutoDnsRequest(null);
+    if (!configured && fallback?.recordType === 'CNAME') {
+      setCnameGuide({ recordName: fallback.fqdn, recordCname: fallback.value });
+    }
   };
 
   const handleCopy = async (key: string, text?: string) => {
@@ -570,25 +587,85 @@ export default function EsaRecordManagement({
     ]);
   };
 
+  const getManagedCnamePayload = async (recordId: string): Promise<{ recordName: string; recordCname: string } | null> => {
+    const normalizedRecordId = String(recordId || '').trim();
+    if (!normalizedRecordId) return null;
+
+    try {
+      const detail = await getEsaRecord({ credentialId, recordId: normalizedRecordId, region });
+      const record = detail.data?.record;
+      const recordName = String(record?.recordName || '').trim();
+      const recordCname = String(record?.recordCname || '').trim();
+      if (!recordName || !recordCname) return null;
+      return { recordName, recordCname };
+    } catch {
+      return null;
+    }
+  };
+
+  const silentlyEnsureManagedCname = async (recordId: string) => {
+    const target = await getManagedCnamePayload(recordId);
+    if (!target) return;
+
+    try {
+      const candidates = await findMatchingCandidateZones(allDnsCredentials, target.recordName);
+      const selectedZone = pickSilentAutoDnsCandidate(target.recordName, candidates);
+      if (!selectedZone) return;
+
+      await upsertDnsRecordForZone(selectedZone, {
+        recordType: 'CNAME',
+        fqdn: target.recordName,
+        value: target.recordCname,
+      });
+    } catch (error) {
+      console.warn('ESA edited record CNAME auto-config skipped:', error);
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: (payload: any) => createEsaRecord(payload),
     onSuccess: async (resp: any) => {
       await queryClient.invalidateQueries({ queryKey: ['esa-records', credentialId, siteId] });
       await queryClient.invalidateQueries({ queryKey: ['esa-cname-status', credentialId, siteId] });
       await queryClient.invalidateQueries({ queryKey: ['esa-cert-status', credentialId, siteId] });
-      closeDialog();
       const recordId = String(resp?.data?.recordId || '').trim();
-      if (!recordId) return;
-
-      try {
-        const detail = await getEsaRecord({ credentialId, recordId, region });
-        const record = detail.data?.record;
-        const rn = String(record?.recordName || '').trim();
-        const rc = String(record?.recordCname || '').trim();
-        if (rn && rc) setCnameGuide({ recordName: rn, recordCname: rc });
-      } catch {
-        // ignore
+      if (!recordId) {
+        closeDialog();
+        return;
       }
+
+      const target = await getManagedCnamePayload(recordId);
+      if (!target) {
+        closeDialog();
+        return;
+      }
+
+      let nextAutoDnsRequest: AutoDnsConfigRequest | null = null;
+      try {
+        setIsCheckingAutoDns(true);
+        const candidates = await findMatchingCandidateZones(allDnsCredentials, target.recordName);
+        if (candidates.length > 0) {
+          nextAutoDnsRequest = {
+            title: '自动配置 ESA 业务 CNAME',
+            description: '检测到项目内已存在可托管该 CNAME 的域名，可直接自动创建；若取消，将回退到当前手动复制弹窗。',
+            recordType: 'CNAME',
+            fqdn: target.recordName,
+            value: target.recordCname,
+            candidates,
+          };
+        }
+      } catch (error) {
+        console.warn('ESA create record auto-dns check failed:', error);
+      } finally {
+        setIsCheckingAutoDns(false);
+        closeDialog();
+      }
+
+      if (nextAutoDnsRequest) {
+        setAutoDnsRequest(nextAutoDnsRequest);
+        return;
+      }
+      setCnameGuide({ recordName: target.recordName, recordCname: target.recordCname });
     },
     onError: (err) => {
       setSubmitError(String(err));
@@ -597,11 +674,14 @@ export default function EsaRecordManagement({
 
   const updateMutation = useMutation({
     mutationFn: (payload: any) => updateEsaRecord(payload.recordId, payload),
-    onSuccess: async () => {
+    onSuccess: async (_resp: any, variables: any) => {
+      const recordId = String(variables?.recordId || '').trim();
+      closeDialog();
       await queryClient.invalidateQueries({ queryKey: ['esa-records', credentialId, siteId] });
       await queryClient.invalidateQueries({ queryKey: ['esa-cname-status', credentialId, siteId] });
       await queryClient.invalidateQueries({ queryKey: ['esa-cert-status', credentialId, siteId] });
-      closeDialog();
+      if (!recordId) return;
+      void silentlyEnsureManagedCname(recordId);
     },
     onError: (err) => {
       setSubmitError(String(err));
@@ -617,7 +697,7 @@ export default function EsaRecordManagement({
     },
   });
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isSaving = createMutation.isPending || updateMutation.isPending || isCheckingAutoDns;
 
   const normalizedType = useMemo(() => String(type || '').trim().toUpperCase(), [type]);
   const showPriority = normalizedType === 'MX';
@@ -769,6 +849,7 @@ export default function EsaRecordManagement({
   const renderRecordEditorFields = (topMargin: number, compact = false) => (
     <Stack spacing={2.5} sx={{ mt: topMargin }}>
       {submitError && <Alert severity="error">{submitError}</Alert>}
+      {isCheckingAutoDns && <Alert severity="info">记录已创建，正在检查项目内可自动配置的 DNS...</Alert>}
 
       {!compact && isCnameAccess && (
         <Alert severity="info">
@@ -828,13 +909,13 @@ export default function EsaRecordManagement({
 
       <TextField
         label="TTL（秒）"
-        placeholder="30"
+        placeholder={DEFAULT_ESA_TTL}
         value={ttl}
         onChange={(e) => setTtl(e.target.value)}
         fullWidth
         size="small"
         disabled={isSaving}
-        helperText={compact ? undefined : '范围 30~86400；填 1 由系统决定'}
+        helperText={compact ? undefined : '范围 30~86400；填 1 由系统自动决定'}
       />
 
       <FormControlLabel
@@ -969,7 +1050,7 @@ export default function EsaRecordManagement({
                     label={`HTTPS ${httpsStatus.label}`}
                     color={httpsStatus.color}
                     clickable
-                    onClick={() => openEdit(r)}
+                    onClick={() => openHttps(r)}
                     sx={esaMetaChipSx}
                   />
                 </Stack>
@@ -1582,6 +1663,12 @@ export default function EsaRecordManagement({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <AutoDnsConfigDialog
+        open={!!autoDnsRequest}
+        request={autoDnsRequest}
+        onClose={closeAutoDnsDialog}
+      />
     </Box>
   );
 }

@@ -97,6 +97,16 @@ const PROVIDER_CREDENTIAL_GUIDE: Record<ProviderType, { title: string; steps: st
     ],
     link: 'https://console.dnspod.cn/account/token'
   },
+  ucloud: {
+    title: 'UCloud API Key 获取方式',
+    steps: [
+      '登录 UCloud 控制台',
+      '进入 个人中心 → API 密钥',
+      '创建或查看 API Key',
+      '复制 PublicKey 和 PrivateKey 并填写'
+    ],
+    link: 'https://console.ucloud.cn/uapi/apikey'
+  },
   huawei: {
     title: '华为云 AccessKey 获取方式',
     steps: [
@@ -345,11 +355,17 @@ export default function DnsCredentialManagement() {
         const tokenId = secretsToSubmit.tokenId;
         const token = secretsToSubmit.token;
 
+        const tokenHasComma = Boolean(token && String(token).includes(','));
+        if (tokenHasComma && tokenId) {
+          // 兼容：用户把 "ID,Token" 填进 Token 字段，又同时填了 ID 字段
+          delete secretsToSubmit.tokenId;
+        }
+
         const hasTc3Any = Boolean(secretId || secretKey);
         const hasTc3Pair = Boolean(secretId && secretKey);
         const hasLegacyAny = Boolean(tokenId || token);
-        const hasLegacyPair = Boolean(tokenId && token);
-        const hasLegacyCombined = Boolean(!hasLegacyPair && !tokenId && token && String(token).includes(','));
+        const hasLegacyPair = Boolean(tokenId && token && !tokenHasComma);
+        const hasLegacyCombined = Boolean(tokenHasComma);
         const hasLegacyValid = hasLegacyPair || hasLegacyCombined;
 
         if (!editingCredential) {

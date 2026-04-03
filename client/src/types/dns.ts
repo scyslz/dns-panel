@@ -3,6 +3,7 @@ export type ProviderType =
   | 'aliyun'
   | 'dnspod'
   | 'dnspod_token'
+  | 'ucloud'
   | 'huawei'
   | 'baidu'
   | 'west'

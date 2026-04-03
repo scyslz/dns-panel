@@ -41,7 +41,6 @@ import { DnsLine, ProviderCapabilities, ProviderType } from '@/types/dns';
 import { formatTTL } from '@/utils/formatters';
 import { TTL_OPTIONS } from '@/utils/constants';
 import { useProvider } from '@/contexts/ProviderContext';
-import { alpha } from '@mui/material/styles';
 
 interface DNSRecordTableProps {
   records: DNSRecord[];
@@ -84,7 +83,6 @@ export default function DNSRecordTable({
     const el = containerRef.current;
     if (el) {
       const isOverflowing = el.scrollWidth > el.clientWidth;
-      const isScrolledLeft = el.scrollLeft > 0;
       setHasOverflow(isOverflowing && (el.scrollLeft < el.scrollWidth - el.clientWidth));
     }
   }, []);
@@ -235,7 +233,7 @@ export default function DNSRecordTable({
   };
 
   const normalizeFqdn = (v?: string) => String(v || '').trim().replace(/\.+$/, '').toLowerCase();
-  const visibleRecords = records.filter(r => {
+  const filteredRecords = records.filter(r => {
     if (r.type !== 'NS') return true;
     const zone = normalizeFqdn(r.zoneName);
     if (!zone) return true;
@@ -243,6 +241,9 @@ export default function DNSRecordTable({
     if (!name || name === '@') return false;
     return name !== zone;
   });
+
+  // 如果该 Zone 只有 NS 根记录（被上面的规则全部过滤掉），则回退展示全部记录，避免页面看起来“没拉到数据”
+  const visibleRecords = filteredRecords.length > 0 ? filteredRecords : records;
 
   const renderMobileView = () => (
     <Stack spacing={2}>

@@ -138,8 +138,27 @@ export class DnspodTokenProvider extends BaseProvider {
     super(credentials, DNSPOD_TOKEN_CAPABILITIES);
 
     const { tokenId, token, login_token } = credentials.secrets || {};
-    const computed = tokenId && token ? `${tokenId},${token}` : undefined;
-    const finalLoginToken = String(login_token || computed || '').trim();
+    const tokenIdStr = String(tokenId || '').trim();
+    const tokenStr = String(token || '').trim();
+    const loginTokenStr = String(login_token || '').trim();
+
+    let finalLoginToken = loginTokenStr;
+
+    // 兼容：用户把 "ID,Token" 粘贴进 Token 字段，同时也填写了 tokenId
+    if (!finalLoginToken) {
+      if (tokenStr.includes(',')) {
+        const parts = tokenStr.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          finalLoginToken = `${parts[0]},${parts[1]}`;
+        } else {
+          finalLoginToken = tokenStr;
+        }
+      } else if (tokenIdStr && tokenStr) {
+        finalLoginToken = `${tokenIdStr},${tokenStr}`;
+      }
+    }
+
+    finalLoginToken = String(finalLoginToken || '').trim();
 
     if (!finalLoginToken) {
       throw this.createError('MISSING_CREDENTIALS', '缺少 DNSPod Token（tokenId/token）');

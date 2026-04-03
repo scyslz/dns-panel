@@ -2,7 +2,6 @@ import { Box, Tabs, Tab, Skeleton, alpha } from '@mui/material';
 import type { SyntheticEvent } from 'react';
 import {
   Apps as AllIcon,
-  AccountCircle as AccountIcon,
 } from '@mui/icons-material';
 import { useProvider } from '@/contexts/ProviderContext';
 import { getProviderIcon } from '@/components/Settings/ProviderSelector';

@@ -1,38 +1,44 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
-  Typography,
+  Button,
   Card,
   CardContent,
   CardHeader,
-  TextField,
-  Button,
-  Alert,
+  CircularProgress,
   Divider,
-  Grid,
-  Stack,
-  InputAdornment,
-  IconButton,
   FormControl,
-  FormLabel,
-  RadioGroup,
   FormControlLabel,
+  Grid,
+  IconButton,
+  InputAdornment,
   Radio,
+  RadioGroup,
+  Stack,
   Switch,
-  CircularProgress
+  TextField,
+  Typography,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import {
+  Language as DomainIcon,
+  Save as SaveIcon,
+  Security as SecurityIcon,
   Visibility,
   VisibilityOff,
-  Security as SecurityIcon,
-  Save as SaveIcon,
-  Language as DomainIcon
 } from '@mui/icons-material';
-import { getCurrentUser, getStoredUser, updateDomainExpirySettings, updatePassword } from '@/services/auth';
-import { isStrongPassword } from '@/utils/validators';
+import {
+  getCurrentUser,
+  getStoredUser,
+  updateDomainExpirySettings,
+  updatePassword,
+} from '@/services/auth';
+import CertificateSettingsCard from '@/components/Settings/CertificateSettingsCard';
 import DnsCredentialManagement from '@/components/Settings/DnsCredentialManagement';
+import NotificationChannelsCard from '@/components/Settings/NotificationChannelsCard';
 import TwoFactorSettings from '@/components/Settings/TwoFactorSettings';
+import { isStrongPassword } from '@/utils/validators';
 
 interface PasswordForm {
   oldPassword: string;
@@ -43,9 +49,6 @@ interface PasswordForm {
 const DOMAINS_PER_PAGE_STORAGE_KEY = 'dns_domains_per_page';
 const DOMAINS_PER_PAGE_CHANGED_EVENT = 'dns_domains_per_page_changed';
 
-/**
- * 设置页面
- */
 export default function Settings() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -59,21 +62,10 @@ export default function Settings() {
   const [expirySettingsSaving, setExpirySettingsSaving] = useState(false);
   const [expiryDisplayMode, setExpiryDisplayMode] = useState<'date' | 'days'>('date');
   const [expiryThresholdDays, setExpiryThresholdDays] = useState<string>('7');
-  const [expiryNotifyEnabled, setExpiryNotifyEnabled] = useState(false);
-  const [expiryWebhookUrl, setExpiryWebhookUrl] = useState('');
-  const [expiryEmailEnabled, setExpiryEmailEnabled] = useState(false);
-  const [expiryEmailTo, setExpiryEmailTo] = useState('');
-  const [smtpHost, setSmtpHost] = useState('');
-  const [smtpPort, setSmtpPort] = useState<string>('587');
-  const [smtpSecure, setSmtpSecure] = useState(false);
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [smtpPassConfigured, setSmtpPassConfigured] = useState(false);
-  const [smtpFrom, setSmtpFrom] = useState('');
+  const [showNonAuthoritativeDomains, setShowNonAuthoritativeDomains] = useState(false);
 
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   const {
     register: registerPassword,
@@ -99,38 +91,8 @@ export default function Settings() {
     if (typeof stored?.domainExpiryThresholdDays === 'number' && Number.isFinite(stored.domainExpiryThresholdDays)) {
       setExpiryThresholdDays(String(stored.domainExpiryThresholdDays));
     }
-    if (typeof stored?.domainExpiryNotifyEnabled === 'boolean') {
-      setExpiryNotifyEnabled(stored.domainExpiryNotifyEnabled);
-    }
-    if (typeof stored?.domainExpiryNotifyWebhookUrl === 'string') {
-      setExpiryWebhookUrl(stored.domainExpiryNotifyWebhookUrl);
-    }
-    if (typeof stored?.domainExpiryNotifyEmailEnabled === 'boolean') {
-      setExpiryEmailEnabled(stored.domainExpiryNotifyEmailEnabled);
-    }
-    if (typeof stored?.domainExpiryNotifyEmailTo === 'string') {
-      setExpiryEmailTo(stored.domainExpiryNotifyEmailTo);
-    } else if (typeof stored?.email === 'string') {
-      setExpiryEmailTo(stored.email);
-    }
-
-    if (typeof stored?.smtpHost === 'string') {
-      setSmtpHost(stored.smtpHost);
-    }
-    if (typeof stored?.smtpPort === 'number' && Number.isFinite(stored.smtpPort)) {
-      setSmtpPort(String(stored.smtpPort));
-    }
-    if (typeof stored?.smtpSecure === 'boolean') {
-      setSmtpSecure(stored.smtpSecure);
-    }
-    if (typeof stored?.smtpUser === 'string') {
-      setSmtpUser(stored.smtpUser);
-    }
-    if (typeof stored?.smtpFrom === 'string') {
-      setSmtpFrom(stored.smtpFrom);
-    }
-    if (typeof stored?.smtpPassConfigured === 'boolean') {
-      setSmtpPassConfigured(stored.smtpPassConfigured);
+    if (typeof stored?.showNonAuthoritativeDomains === 'boolean') {
+      setShowNonAuthoritativeDomains(stored.showNonAuthoritativeDomains);
     }
   }, []);
 
@@ -149,32 +111,9 @@ export default function Settings() {
         if (typeof user.domainExpiryThresholdDays === 'number' && Number.isFinite(user.domainExpiryThresholdDays)) {
           setExpiryThresholdDays(String(user.domainExpiryThresholdDays));
         }
-        if (typeof user.domainExpiryNotifyEnabled === 'boolean') {
-          setExpiryNotifyEnabled(user.domainExpiryNotifyEnabled);
+        if (typeof user.showNonAuthoritativeDomains === 'boolean') {
+          setShowNonAuthoritativeDomains(user.showNonAuthoritativeDomains);
         }
-        if (typeof user.domainExpiryNotifyWebhookUrl === 'string') {
-          setExpiryWebhookUrl(user.domainExpiryNotifyWebhookUrl);
-        } else {
-          setExpiryWebhookUrl('');
-        }
-        if (typeof user.domainExpiryNotifyEmailEnabled === 'boolean') {
-          setExpiryEmailEnabled(user.domainExpiryNotifyEmailEnabled);
-        }
-        if (typeof user.domainExpiryNotifyEmailTo === 'string') {
-          setExpiryEmailTo(user.domainExpiryNotifyEmailTo);
-        } else if (typeof user.email === 'string') {
-          setExpiryEmailTo(user.email);
-        } else {
-          setExpiryEmailTo('');
-        }
-
-        setSmtpHost(typeof user.smtpHost === 'string' ? user.smtpHost : '');
-        setSmtpPort(typeof user.smtpPort === 'number' && Number.isFinite(user.smtpPort) ? String(user.smtpPort) : '587');
-        setSmtpSecure(typeof user.smtpSecure === 'boolean' ? user.smtpSecure : false);
-        setSmtpUser(typeof user.smtpUser === 'string' ? user.smtpUser : '');
-        setSmtpFrom(typeof user.smtpFrom === 'string' ? user.smtpFrom : '');
-        setSmtpPassConfigured(!!user.smtpPassConfigured);
-        setSmtpPass('');
       } catch {}
     })();
   }, []);
@@ -192,7 +131,7 @@ export default function Settings() {
       setPasswordSuccess('密码修改成功');
       resetPassword();
     } catch (err: any) {
-      setPasswordError((err as any)?.message || String(err) || '密码修改失败');
+      setPasswordError(err?.message || String(err) || '密码修改失败');
     }
   };
 
@@ -223,94 +162,22 @@ export default function Settings() {
       return;
     }
 
-    if (expiryNotifyEnabled && !expiryWebhookUrl.trim()) {
-      setExpirySettingsError('启用通知时需填写 Webhook URL');
-      return;
-    }
-
-    if (expiryEmailEnabled) {
-      const email = expiryEmailTo.trim();
-      if (!email) {
-        setExpirySettingsError('启用邮件通知时需填写收件邮箱');
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        setExpirySettingsError('收件邮箱格式不正确');
-        return;
-      }
-    }
-
-    const smtpHostTrim = smtpHost.trim();
-    const hasCustomSmtp = !!smtpHostTrim;
-    const smtpFromTrim = smtpFrom.trim();
-    const smtpUserTrim = smtpUser.trim();
-    const smtpPassTrim = smtpPass.trim();
-
-    let smtpPortValue: number | null = null;
-    const portRaw = smtpPort.trim();
-    if (hasCustomSmtp && portRaw) {
-      const parsedPort = parseInt(portRaw, 10);
-      if (!Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-        setExpirySettingsError('SMTP 端口无效，应为 1-65535 的整数');
-        return;
-      }
-      smtpPortValue = parsedPort;
-    }
-
-    if (expiryEmailEnabled && hasCustomSmtp && !smtpFromTrim) {
-      setExpirySettingsError('启用邮件通知且使用自定义 SMTP 时需填写 From');
-      return;
-    }
-
-    if (hasCustomSmtp) {
-      if (!smtpUserTrim && smtpPassTrim) {
-        setExpirySettingsError('填写 SMTP 密码时需同时填写 SMTP 用户名');
-        return;
-      }
-      if (smtpUserTrim && !smtpPassTrim && !smtpPassConfigured) {
-        setExpirySettingsError('请填写 SMTP 密码');
-        return;
-      }
-    }
-
     setExpirySettingsSaving(true);
     try {
-      const payload: any = {
+      const res = await updateDomainExpirySettings({
         displayMode: expiryDisplayMode,
         thresholdDays: threshold,
-        notifyEnabled: expiryNotifyEnabled,
-        webhookUrl: expiryWebhookUrl.trim() ? expiryWebhookUrl.trim() : null,
-        notifyEmailEnabled: expiryEmailEnabled,
-        emailTo: expiryEmailTo.trim() ? expiryEmailTo.trim() : null,
-        smtpHost: hasCustomSmtp ? smtpHostTrim : null,
-        smtpPort: hasCustomSmtp ? smtpPortValue : null,
-        smtpSecure: hasCustomSmtp ? smtpSecure : null,
-        smtpUser: hasCustomSmtp ? (smtpUserTrim ? smtpUserTrim : null) : null,
-        smtpFrom: hasCustomSmtp ? (smtpFromTrim ? smtpFromTrim : null) : null,
-      };
-
-      if (!hasCustomSmtp) {
-        payload.smtpPass = null;
-      } else if (smtpPassTrim) {
-        payload.smtpPass = smtpPassTrim;
-      }
-
-      const res = await updateDomainExpirySettings(payload);
+        showNonAuthoritativeDomains,
+      });
 
       const user = res?.data?.user;
       if (user) {
         localStorage.setItem('user', JSON.stringify(user));
-        setSmtpHost(typeof user.smtpHost === 'string' ? user.smtpHost : '');
-        setSmtpPort(typeof user.smtpPort === 'number' && Number.isFinite(user.smtpPort) ? String(user.smtpPort) : '587');
-        setSmtpSecure(typeof user.smtpSecure === 'boolean' ? user.smtpSecure : false);
-        setSmtpUser(typeof user.smtpUser === 'string' ? user.smtpUser : '');
-        setSmtpFrom(typeof user.smtpFrom === 'string' ? user.smtpFrom : '');
-        setSmtpPassConfigured(!!user.smtpPassConfigured);
-        setSmtpPass('');
+        setShowNonAuthoritativeDomains(!!user.showNonAuthoritativeDomains);
       }
       setExpirySettingsSuccess('设置已保存');
     } catch (err: any) {
-      setExpirySettingsError(err || '设置保存失败');
+      setExpirySettingsError(err?.message || '设置保存失败');
     } finally {
       setExpirySettingsSaving(false);
     }
@@ -319,8 +186,7 @@ export default function Settings() {
   return (
     <Box>
       <Grid container spacing={3}>
-        {/* 左侧：安全设置 & 域名设置 */}
-        <Grid item xs={12} md={5}>
+        <Grid item xs={12} md={5} sx={{ order: { xs: 2, md: 1 } }}>
           <Stack spacing={3}>
             <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: 'none' }}>
               <CardHeader
@@ -330,16 +196,8 @@ export default function Settings() {
               />
               <Divider />
               <CardContent>
-                {passwordSuccess && (
-                  <Alert severity="success" sx={{ mb: 3 }}>
-                    {passwordSuccess}
-                  </Alert>
-                )}
-                {passwordError && (
-                  <Alert severity="error" sx={{ mb: 3 }}>
-                    {passwordError}
-                  </Alert>
-                )}
+                {passwordSuccess ? <Alert severity="success" sx={{ mb: 3 }}>{passwordSuccess}</Alert> : null}
+                {passwordError ? <Alert severity="error" sx={{ mb: 3 }}>{passwordError}</Alert> : null}
 
                 <form onSubmit={handlePasswordSubmit(onPasswordSubmit)}>
                   <Stack spacing={2}>
@@ -353,10 +211,7 @@ export default function Settings() {
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position="end">
-                            <IconButton
-                              onClick={() => setShowOldPassword(!showOldPassword)}
-                              edge="end"
-                            >
+                            <IconButton onClick={() => setShowOldPassword((prev) => !prev)} edge="end">
                               {showOldPassword ? <VisibilityOff /> : <Visibility />}
                             </IconButton>
                           </InputAdornment>
@@ -378,10 +233,7 @@ export default function Settings() {
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position="end">
-                            <IconButton
-                              onClick={() => setShowNewPassword(!showNewPassword)}
-                              edge="end"
-                            >
+                            <IconButton onClick={() => setShowNewPassword((prev) => !prev)} edge="end">
                               {showNewPassword ? <VisibilityOff /> : <Visibility />}
                             </IconButton>
                           </InputAdornment>
@@ -424,37 +276,30 @@ export default function Settings() {
               <CardHeader
                 avatar={<DomainIcon color="primary" />}
                 title={<Typography variant="h6" fontWeight="bold">域名设置</Typography>}
-                subheader="列表显示与到期通知"
+                subheader="列表显示与到期规则；通知设置已单独拆分管理"
               />
               <Divider />
               <CardContent>
                 <Stack spacing={2}>
                   <Typography variant="subtitle1" fontWeight={600}>
-                    域名列表每页显示数量
+                    域名列表
                   </Typography>
 
-                  {domainsPerPageSuccess && (
-                    <Alert severity="success">
-                      {domainsPerPageSuccess}
-                    </Alert>
-                  )}
-                  {domainsPerPageError && (
-                    <Alert severity="error">
-                      {domainsPerPageError}
-                    </Alert>
-                  )}
+                  {domainsPerPageSuccess ? <Alert severity="success">{domainsPerPageSuccess}</Alert> : null}
+                  {domainsPerPageError ? <Alert severity="error">{domainsPerPageError}</Alert> : null}
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-end' }}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={2}
+                    alignItems={{ xs: 'stretch', sm: 'flex-end' }}
+                  >
                     <TextField
                       value={domainsPerPage}
-                      onChange={(e) => setDomainsPerPage(e.target.value)}
+                      onChange={(event) => setDomainsPerPage(event.target.value)}
                       type="number"
                       label="每页域名数量"
-                      size="small"
                       sx={{ width: { xs: '100%', sm: 240 } }}
-                      InputProps={{
-                        inputProps: { min: 20 },
-                      }}
+                      InputProps={{ inputProps: { min: 20 } }}
                     />
                     <Button
                       variant="outlined"
@@ -466,6 +311,19 @@ export default function Settings() {
                       保存
                     </Button>
                   </Stack>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={showNonAuthoritativeDomains}
+                        onChange={(event) => setShowNonAuthoritativeDomains(event.target.checked)}
+                      />
+                    }
+                    label="显示非权威域名"
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    默认隐藏仅注册或当前未托管在本项目 DNS 提供商的域名；开启后仅用于排查，不影响 ESA / 自动 DNS。
+                  </Typography>
                 </Stack>
 
                 <Divider sx={{ my: 3 }} />
@@ -475,16 +333,8 @@ export default function Settings() {
                     域名到期
                   </Typography>
 
-                  {expirySettingsSuccess && (
-                    <Alert severity="success">
-                      {expirySettingsSuccess}
-                    </Alert>
-                  )}
-                  {expirySettingsError && (
-                    <Alert severity="error">
-                      {expirySettingsError}
-                    </Alert>
-                  )}
+                  {expirySettingsSuccess ? <Alert severity="success">{expirySettingsSuccess}</Alert> : null}
+                  {expirySettingsError ? <Alert severity="error">{expirySettingsError}</Alert> : null}
 
                   <FormControl sx={{ mt: -0.5 }}>
                     <RadioGroup
@@ -492,7 +342,7 @@ export default function Settings() {
                       aria-label="列表显示"
                       sx={{ gap: 2 }}
                       value={expiryDisplayMode}
-                      onChange={(e) => setExpiryDisplayMode((e.target as HTMLInputElement).value as any)}
+                      onChange={(event) => setExpiryDisplayMode((event.target as HTMLInputElement).value as 'date' | 'days')}
                     >
                       <FormControlLabel sx={{ m: 0 }} value="date" control={<Radio />} label="到期日期" />
                       <FormControlLabel sx={{ m: 0 }} value="days" control={<Radio />} label="剩余天数" />
@@ -501,168 +351,13 @@ export default function Settings() {
 
                   <TextField
                     value={expiryThresholdDays}
-                    onChange={(e) => setExpiryThresholdDays(e.target.value)}
+                    onChange={(event) => setExpiryThresholdDays(event.target.value)}
                     type="number"
                     label="到期阈值（天）"
-                    size="small"
                     sx={{ width: { xs: '100%', sm: 240 } }}
-                    InputProps={{
-                      inputProps: { min: 1, max: 365 },
-                    }}
+                    InputProps={{ inputProps: { min: 1, max: 365 } }}
                     helperText="当域名剩余天数 ≤ 阈值时触发通知"
                   />
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={expiryNotifyEnabled}
-                        onChange={(e) => setExpiryNotifyEnabled(e.target.checked)}
-                      />
-                    }
-                    label="启用到期通知（Webhook）"
-                  />
-
-                  <TextField
-                    fullWidth
-                    value={expiryWebhookUrl}
-                    onChange={(e) => setExpiryWebhookUrl(e.target.value)}
-                    disabled={!expiryNotifyEnabled}
-                    label="Webhook URL"
-                    size="small"
-                    placeholder="https://example.com/webhook"
-                    helperText="服务器每天检查一次；命中阈值将向该 URL POST JSON"
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={expiryEmailEnabled}
-                        onChange={(e) => setExpiryEmailEnabled(e.target.checked)}
-                      />
-                    }
-                    label="启用到期通知（邮件）"
-                  />
-
-                  <TextField
-                    fullWidth
-                    value={expiryEmailTo}
-                    onChange={(e) => setExpiryEmailTo(e.target.value)}
-                    disabled={!expiryEmailEnabled}
-                    label="接收邮箱"
-                    size="small"
-                    placeholder="admin@example.com"
-                    helperText="命中阈值将发送邮件提醒"
-                  />
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    SMTP 设置
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    留空则使用服务端环境变量 SMTP_*；填写 SMTP 主机后将使用自定义 SMTP。
-                  </Typography>
-
-                  <Stack spacing={2} sx={{ width: '100%' }}>
-                    <TextField
-                      fullWidth
-                      value={smtpHost}
-                      onChange={(e) => setSmtpHost(e.target.value)}
-                      label="SMTP 主机"
-                      size="small"
-                      placeholder="smtp.example.com"
-                    />
-
-                    <Box
-                      sx={{
-                        width: '100%',
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', sm: '240px 1fr' },
-                        gap: 2,
-                        alignItems: { sm: 'center' },
-                      }}
-                    >
-                      <TextField
-                        fullWidth
-                        value={smtpPort}
-                        onChange={(e) => setSmtpPort(e.target.value)}
-                        disabled={!smtpHost.trim()}
-                        type="number"
-                        label="端口"
-                        size="small"
-                        placeholder="587"
-                        InputProps={{
-                          inputProps: { min: 1, max: 65535 },
-                        }}
-                      />
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={smtpSecure}
-                            onChange={(e) => setSmtpSecure(e.target.checked)}
-                            disabled={!smtpHost.trim()}
-                          />
-                        }
-                        label="使用 SMTPS"
-                        sx={{ m: 0 }}
-                      />
-                    </Box>
-
-                    <Box
-                      sx={{
-                        width: '100%',
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                        gap: 2,
-                      }}
-                    >
-                      <TextField
-                        fullWidth
-                        value={smtpUser}
-                        onChange={(e) => setSmtpUser(e.target.value)}
-                        disabled={!smtpHost.trim()}
-                        label="SMTP 用户名（可选）"
-                        size="small"
-                        placeholder="user@example.com"
-                        helperText="如不需要认证，用户名/密码都留空"
-                      />
-
-                      <TextField
-                        fullWidth
-                        value={smtpPass}
-                        onChange={(e) => setSmtpPass(e.target.value)}
-                        disabled={!smtpHost.trim()}
-                        type={showSmtpPassword ? 'text' : 'password'}
-                        label="SMTP 密码（可选）"
-                        size="small"
-                        placeholder={smtpPassConfigured ? '已设置（留空不修改）' : '留空表示不使用认证'}
-                        helperText={smtpPassConfigured ? '已设置（留空不修改）' : undefined}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                onClick={() => setShowSmtpPassword(!showSmtpPassword)}
-                                edge="end"
-                              >
-                                {showSmtpPassword ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Box>
-
-                    <TextField
-                      fullWidth
-                      value={smtpFrom}
-                      onChange={(e) => setSmtpFrom(e.target.value)}
-                      disabled={!smtpHost.trim()}
-                      label="From（发件人）"
-                      size="small"
-                      placeholder="DNS Panel <no-reply@example.com>"
-                    />
-                  </Stack>
 
                   <Box>
                     <Button
@@ -679,11 +374,13 @@ export default function Settings() {
                 </Stack>
               </CardContent>
             </Card>
+
+            <CertificateSettingsCard />
+            <NotificationChannelsCard />
           </Stack>
         </Grid>
 
-        {/* 右侧：DNS 账户管理 */}
-        <Grid item xs={12} md={7}>
+        <Grid item xs={12} md={7} sx={{ order: { xs: 1, md: 2 } }}>
           <DnsCredentialManagement />
         </Grid>
       </Grid>

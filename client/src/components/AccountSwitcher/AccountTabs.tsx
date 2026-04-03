@@ -1,6 +1,5 @@
 import { Box, Tabs, Tab, Skeleton } from '@mui/material';
 import {
-  CloudQueue as CloudIcon,
   SupervisedUserCircle as UserIcon,
   Business as BusinessIcon,
   Apps as AllIcon

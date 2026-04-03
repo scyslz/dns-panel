@@ -20,7 +20,10 @@ import {
 } from '@mui/material';
 import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import type { DnsCredential } from '@/types/dns';
-import { createEsaSite, ESA_SUPPORTED_REGIONS, listEsaRatePlanInstances, type EsaRatePlanInstance } from '@/services/aliyunEsa';
+import { useProvider } from '@/contexts/ProviderContext';
+import AutoDnsConfigDialog, { type AutoDnsConfigRequest } from './AutoDnsConfigDialog';
+import { findMatchingCandidateZones } from '@/utils/autoDns';
+import { createEsaSite, ESA_SUPPORTED_REGIONS, listEsaRatePlanInstances, verifyEsaSite, type EsaRatePlanInstance } from '@/services/aliyunEsa';
 
 const COVERAGE_OPTIONS: Array<{ value: string; label: string; help: string }> = [
   { value: 'overseas', label: '海外', help: '不包含中国内地' },
@@ -57,6 +60,7 @@ export default function AddEsaSiteDialog({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { credentials: allDnsCredentials } = useProvider();
 
   const [credentialId, setCredentialId] = useState<number>(() => initialCredentialId ?? credentials[0]?.id ?? 0);
   const [siteName, setSiteName] = useState('');
@@ -66,6 +70,8 @@ export default function AddEsaSiteDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ siteId: string; verifyCode?: string; nameServerList?: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [autoDnsRequest, setAutoDnsRequest] = useState<AutoDnsConfigRequest | null>(null);
+  const [isCheckingAutoDns, setIsCheckingAutoDns] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +83,8 @@ export default function AddEsaSiteDialog({
     setSubmitError(null);
     setCreated(null);
     setCopiedKey(null);
+    setAutoDnsRequest(null);
+    setIsCheckingAutoDns(false);
   }, [open, initialCredentialId, credentials]);
 
   const selectedCredential = useMemo(
@@ -161,13 +169,57 @@ export default function AddEsaSiteDialog({
   const mutation = useMutation({
     mutationFn: (payload: { credentialId: number; siteName: string; coverage: string; accessType: string; instanceId: string; region?: string }) =>
       createEsaSite(payload),
-    onSuccess: (resp) => {
-      setCreated(resp.data ? {
+    onSuccess: async (resp) => {
+      const createdSite = resp.data ? {
         siteId: resp.data.siteId,
         verifyCode: resp.data.verifyCode,
         nameServerList: resp.data.nameServerList,
-      } : null);
+      } : null;
       setSubmitError(null);
+      setCreated(createdSite);
+
+      const verifyCode = String(resp.data?.verifyCode || '').trim();
+      const verifyRecordName = siteName.trim() ? `_esaauth.${siteName.trim()}` : '';
+      if (String(accessType || '').trim().toUpperCase() !== 'CNAME' || !verifyCode || !verifyRecordName) {
+        return;
+      }
+
+      setIsCheckingAutoDns(true);
+      try {
+        const candidates = await findMatchingCandidateZones(allDnsCredentials, verifyRecordName);
+        if (candidates.length === 0) {
+          return;
+        }
+
+        setAutoDnsRequest({
+          title: '自动配置 ESA 验证 TXT',
+          description: '检测到项目内已存在可托管该 TXT 的域名，可直接自动创建；若不处理，仍可按当前弹窗内容手动配置。',
+          recordType: 'TXT',
+          fqdn: verifyRecordName,
+          value: verifyCode,
+          candidates,
+          afterUpsert: {
+            pendingText: 'TXT 已处理，正在自动验证 ESA 站点...',
+            successText: 'ESA 站点验证已自动完成',
+            run: async () => {
+              const verifyResp = await verifyEsaSite({
+                credentialId: selectedCredential?.id || credentialId,
+                siteId: String(resp.data?.siteId || ''),
+                region: selectedRegion,
+              });
+              if (verifyResp.data?.passed) {
+                return { success: true, message: 'ESA 站点验证已自动完成' };
+              }
+              return { success: false, message: 'TXT 已创建，但 ESA 自动验证暂未通过，可能需要等待 DNS 生效后再试' };
+            },
+          },
+        });
+        return;
+      } catch {
+        return;
+      } finally {
+        setIsCheckingAutoDns(false);
+      }
     },
     onError: (err) => {
       setSubmitError(String(err));
@@ -175,9 +227,13 @@ export default function AddEsaSiteDialog({
     },
   });
 
+  const isCreated = !!created?.siteId;
+  const isFormDisabled = mutation.isPending || isCheckingAutoDns || isCreated;
   const canSubmit =
     !!selectedCredential &&
+    !isCreated &&
     !mutation.isPending &&
+    !isCheckingAutoDns &&
     !instancesQuery.isLoading &&
     !!siteName.trim() &&
     !!coverage.trim() &&
@@ -199,6 +255,7 @@ export default function AddEsaSiteDialog({
   };
 
   const handleSubmit = () => {
+    if (isCreated) return;
     if (!selectedCredential) {
       setSubmitError('请选择账户');
       return;
@@ -225,14 +282,22 @@ export default function AddEsaSiteDialog({
   };
 
   const handleDone = () => {
-    if (mutation.isPending) return;
+    if (mutation.isPending || isCheckingAutoDns) return;
     onClose(!!created?.siteId);
+  };
+
+  const handleAutoDnsClose = (configured: boolean) => {
+    setAutoDnsRequest(null);
+    if (configured) {
+      onClose(true);
+    }
   };
 
   const coverageHelp = COVERAGE_OPTIONS.find(o => o.value === coverage)?.help;
   const accessHelp = ACCESS_TYPE_OPTIONS.find(o => o.value === accessType)?.help;
 
   const verifyTxtName = siteName.trim() ? `_esaauth.${siteName.trim()}` : '_esaauth.<domain>';
+  const showManualTxtGuide = isCreated && accessType === 'CNAME' && !isCheckingAutoDns && !autoDnsRequest;
 
   return (
     <Dialog open={open} onClose={handleDone} maxWidth="sm" fullWidth fullScreen={isMobile}>
@@ -250,7 +315,7 @@ export default function AddEsaSiteDialog({
             onChange={(e) => setCredentialId(parseInt(e.target.value, 10))}
             fullWidth
             size="small"
-            disabled={mutation.isPending || credentials.length === 0}
+            disabled={isFormDisabled || credentials.length === 0}
             helperText={credentials.length === 0 ? '暂无可用账户，请先在设置中添加阿里云 DNS 凭证' : undefined}
           >
             {credentials.map(c => (
@@ -265,7 +330,7 @@ export default function AddEsaSiteDialog({
             onChange={(e) => setSiteName(e.target.value)}
             fullWidth
             size="small"
-            disabled={mutation.isPending}
+            disabled={isFormDisabled}
             autoComplete="off"
           />
 
@@ -276,7 +341,7 @@ export default function AddEsaSiteDialog({
             onChange={(e) => setAccessType(e.target.value)}
             fullWidth
             size="small"
-            disabled={mutation.isPending}
+            disabled={isFormDisabled}
             helperText={accessHelp}
           >
             {ACCESS_TYPE_OPTIONS.map(o => (
@@ -291,7 +356,7 @@ export default function AddEsaSiteDialog({
             onChange={(e) => setCoverage(e.target.value)}
             fullWidth
             size="small"
-            disabled={mutation.isPending}
+            disabled={isFormDisabled}
             helperText={coverageHelp}
           >
             {COVERAGE_OPTIONS.map(o => (
@@ -306,7 +371,7 @@ export default function AddEsaSiteDialog({
             onChange={(e) => setInstanceId(e.target.value)}
             fullWidth
             size="small"
-            disabled={mutation.isPending || instancesQuery.isLoading}
+            disabled={isFormDisabled || instancesQuery.isLoading}
             helperText={
               instancesQuery.isLoading
                 ? '加载中...'
@@ -348,6 +413,12 @@ export default function AddEsaSiteDialog({
 
           {submitError && <Alert severity="error">{submitError}</Alert>}
 
+          {isCheckingAutoDns && (
+            <Alert severity="info" icon={<CircularProgress size={16} color="inherit" />}>
+              站点已创建，正在检查项目内是否存在可自动配置的 DNS...
+            </Alert>
+          )}
+
           {mutation.isPending && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={18} />
@@ -361,7 +432,7 @@ export default function AddEsaSiteDialog({
                 <Typography variant="subtitle2">创建成功</Typography>
                 <Typography variant="body2">SiteId: {created.siteId}</Typography>
 
-                {accessType === 'CNAME' && (
+                {showManualTxtGuide && (
                   <>
                     <Typography variant="body2">
                       请添加 TXT 记录完成验证：
@@ -406,17 +477,25 @@ export default function AddEsaSiteDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={handleDone} color="inherit" disabled={mutation.isPending}>
+        <Button onClick={handleDone} color="inherit" disabled={mutation.isPending || isCheckingAutoDns}>
           {created?.siteId ? '完成' : '取消'}
         </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={!canSubmit}
-        >
-          {mutation.isPending ? <CircularProgress size={22} color="inherit" /> : '创建站点'}
-        </Button>
+        {!isCreated && (
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={!canSubmit}
+          >
+            {mutation.isPending ? <CircularProgress size={22} color="inherit" /> : '创建站点'}
+          </Button>
+        )}
       </DialogActions>
+
+      <AutoDnsConfigDialog
+        open={!!autoDnsRequest}
+        request={autoDnsRequest}
+        onClose={handleAutoDnsClose}
+      />
     </Dialog>
   );
 }

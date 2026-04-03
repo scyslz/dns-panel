@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/r/a3180623/dns-panel)
 
-> 现代化的多 DNS 服务商统一管理面板：多用户、多凭证隔离，统一管理域名与 DNS 解析记录，支持 Cloudflare Tunnels 管理，并提供操作日志审计。
+> 现代化的多 DNS 服务商统一管理面板：多用户、多凭证隔离，统一管理域名与 DNS 解析记录，支持通用证书中心、Cloudflare Tunnels 管理，并提供操作日志审计。
 
 ---
 
@@ -13,6 +13,7 @@
 - [Cloudflare Tunnels](#-cloudflare-tunnels)
 - [支持的服务商](#-支持的服务商)
 - [技术栈](#-技术栈)
+- [相关文档](#-相关文档)
 - [快速部署](#-快速部署docker-compose)
 - [Docker Hub 镜像](#-docker-hub-镜像部署)
 - [首次使用](#-首次使用)
@@ -27,6 +28,8 @@
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
+| v1.7.0 | 2026-03-31 | 🔐 新增证书中心（ACME/订单/自动续期/部署矩阵/通知）+ 域名到期手动设置 |
+| v1.6.0 | 2026-03-24 | ✨ 新增 ESA 自动 DNS 配置、全提供商权威 DNS 识别、非权威域名显示开关 |
 | v1.5.0 | 2026-03-02 | 🆕 新增 Cloudflare Tunnels 管理：隧道创建/删除、详情面板、cloudflared 安装指引、三类路由管理（Public Hostnames / CIDR / 主机名路由） |
 | v1.4.1 | 2026-02-18 | ✨ 抽屉支持 DNS 服务商拖拽排序 + 前端体验优化 |
 | v1.4.0 | 2026-02-18 | ✨ 新增阿里云 ESA 站点管理与免费证书 |
@@ -37,6 +40,39 @@
 
 <details>
 <summary><b>查看完整更新日志</b></summary>
+
+### v1.7.0 (2026-03-31)
+- 🔐 **新增通用证书中心（Certificate Center）**
+  - 证书订单：草稿/申请、DNS-01 自动写入/清理、状态机 + 重试、打包下载（ZIP）
+  - ACME 账户：Let's Encrypt / ZeroSSL / Google / Custom（支持 EAB）
+  - 自动续期：后台调度器轮询续期、失败重试、续期后自动触发部署
+  - 部署矩阵：部署目标/部署任务（支持 Webhook / Dokploy / 1Panel / Nginx Proxy Manager 等），可手动执行部署
+  - 厂商证书：腾讯云/阿里云/UCloud SSL 订单统一管理（含 DNS 验证与下载）
+  - CNAME 代理：证书 CNAME Alias 管理与校验
+  - 通知：证书/部署/厂商渠道通知策略 + 多通道配置（邮件/Webhook/Telegram/钉钉/飞书/企微等）
+- ✨ **域名到期时间支持手动设置**：自动查询失败时可编辑补充；自动成功时也可覆盖并支持清除恢复自动
+
+### v1.6.0 (2026-03-24)
+- ✨ **增强阿里云 ESA 自动 DNS**
+  - ESA 站点创建后，如为 CNAME 接入且项目内命中可托管 `_esaauth.<domain>` 的权威域名，可直接自动创建验证 TXT
+  - ESA 业务记录创建后，如项目内命中可托管该记录名的权威域名，可直接自动创建业务 CNAME
+  - 当命中多个可用主域名时，弹窗要求用户确认目标账户 / 域名后再继续
+  - TXT 自动创建完成后会自动触发 ESA `VerifySite`
+- ✨ **新增权威 DNS 识别框架**
+  - 域名列表与详情统一输出 `authorityStatus / authorityReason / authorityMeta`
+  - 自动识别 `authoritative / pending / non_authoritative / unknown`
+  - 已接入 Cloudflare、阿里云、DNSPod、华为云、PowerDNS、火山引擎、京东云、Spaceship、NameSilo 等提供商的权威识别
+  - 对百度云、西部数码、DNSLA 等元数据不足的提供商保持保守判定，避免误判为可自动接入
+- ✨ **新增非权威域名显示开关**
+  - 设置页新增「显示非权威域名」开关，默认关闭
+  - 仅控制域名列表是否显示 `non_authoritative`
+  - `pending / unknown` 仍然显示，便于排查待接入或待识别域名
+- 🔒 **自动流程更严格**
+  - 自动 DNS / ESA 自动接入仅使用 `authoritative` 域名
+  - `unknown / pending / non_authoritative` 不参与自动接入，统一回退手动配置
+- 🐛 **修复自动 DNS 重复记录识别**
+  - 统一将不同服务商返回的相对主机名 / FQDN 规范化后再判断
+  - 已存在同名同类型记录时优先更新，避免误判为重复创建
 
 ### v1.5.0 (2026-03-02)
 - 🆕 **新增 Cloudflare Tunnels 管理**
@@ -108,7 +144,10 @@
 | 功能 | 说明 |
 |------|------|
 | 🌐 多服务商支持 | 统一管理多个 DNS 服务商的域名和解析记录 |
+| ⚡ ESA 自动 DNS | 自动创建 ESA 验证 TXT / 业务 CNAME；多候选时支持人工确认目标主域名 |
+| 🧭 权威 DNS 识别 | 统一识别域名是否为当前托管方权威 DNS，区分 authoritative / pending / non_authoritative / unknown |
 | 🧾 解析记录管理 | 增删改查；支持权重/线路/启停/备注等 |
+| 🔐 通用证书中心 | ACME 账户管理、证书订单管理、DNS-01 自动验证、自动续期、Webhook / Dokploy / 1Panel / NPM 等部署目标、证书下载 |
 | ☁️ Cloudflare 增强 | 自定义主机名、证书状态、Fallback Origin |
 | 🚇 Cloudflare Tunnels | 隧道管理、路由配置（公网主机名 / CIDR / 主机名路由） |
 | 🛡️ 阿里云 ESA | 边缘安全加速站点管理、DNS 记录、免费证书申请/续签 |
@@ -141,8 +180,9 @@
 |-----------|-----------|
 | 阿里云 | Cloudflare |
 | DNSPod（腾讯云） | NameSilo |
-| 华为云 | PowerDNS |
-| 百度云 | Spaceship |
+| UCloud | PowerDNS |
+| 华为云 | Spaceship |
+| 百度云 | |
 | 西部数码 | |
 | 火山引擎 | |
 | 京东云 | |
@@ -160,13 +200,21 @@
 
 ---
 
+## 📚 相关文档
+
+- `快速启动指南.md`：面向新用户的快速部署与使用说明
+- `CERTIFICATE_PLAN.md`：证书中心整体规划
+- `GEMINI_CERTIFICATE_PLAN_REVIEW.md`：证书规划评估记录（Gemini）
+
+---
+
 ## 🚀 快速部署（Docker Compose）
 
 > 推荐方式：前后端一体，只需暴露一个端口。
 
 ## 🏷️ 发版（Tag 自动发布）
 
-项目已提供 GitHub Actions 工作流：当推送 `v*` Tag（例如 `v1.5.0`）时，会自动：
+项目已提供 GitHub Actions 工作流：当推送 `v*` Tag（例如 `v1.7.0`）时，会自动：
 
 - 构建并推送 Docker 镜像：`a3180623/dns-panel:<tag>`、`a3180623/dns-panel:<version>`、`a3180623/dns-panel:latest`
 - 创建 GitHub Release（自动生成 Release Notes）
@@ -174,8 +222,14 @@
 使用方法：
 
 ```bash
-git tag v1.5.0
-git push origin v1.5.0
+# 1) 先提交本次改动（包括 README 的版本更新）
+git add -A
+git commit -m "chore(release): v1.7.0"
+
+# 2) 打 Tag 并推送（触发 Release on Tag 工作流）
+git tag -a v1.7.0 -m "v1.7.0"
+git push origin main  # 仓库如使用 master 分支请改为 master
+git push origin v1.7.0
 ```
 
 发布前请在 GitHub 仓库 Secrets 中配置：
@@ -286,9 +340,15 @@ docker run -d \
 
 1. **注册账号** - 打开 `http://<IP>:3000`，注册管理员账号
 2. **添加凭证** - 进入「设置」→「DNS 账户/凭证」，添加服务商 API 凭证
-3. **开始管理** - 回到仪表盘，选择服务商与账户，管理域名和记录
+3. **开始管理 DNS** - 回到仪表盘，选择服务商与账户，管理域名和记录
+4. **申请证书** - 进入左侧「证书中心」，创建 ACME 账户并发起证书申请
+5. **自动续期 / 推送** - 在证书订单开启自动续期，在「部署目标 / 部署任务」中配置 Webhook、Dokploy、1Panel、Nginx Proxy Manager 等推送
 
 > ⚠️ Cloudflare 自定义主机名功能需要 Token 具备 `区域.SSL 和证书（编辑）` 权限；Tunnels 功能需要 `Account: Cloudflare Tunnel（编辑）` + `Zone: DNS（编辑）` 权限。
+>
+> ⚠️ 通用证书中心默认使用 `DNS-01`；新建证书默认开启自动续期。开发/联调建议保持 `ACME_ENV=staging`。
+>
+> ⚠️ 如需升级旧版 NPM 实验目标类型，可执行：`cd server && npm run cert:deploy:migrate:npm-type`
 
 ---
 
@@ -344,6 +404,12 @@ npm run dev
 | `JWT_EXPIRES_IN` | `7d` | JWT 过期时间 |
 | `LOG_RETENTION_DAYS` | `90` | 日志保留天数 |
 | `DATABASE_URL` | - | SQLite 连接串 |
+| `ACME_ENV` | `production`（当 `NODE_ENV=production` 且未显式设置 ACME_ENV 时），否则 `staging` | ACME 环境：`staging` / `production` |
+| `CERTIFICATE_SCHEDULER_INTERVAL_MS` | `15000` | 证书订单调度器轮询间隔 |
+| `CERTIFICATE_RENEWAL_SCHEDULER_INTERVAL_MS` | `21600000` | 自动续期调度器轮询间隔（默认 6 小时） |
+| `ACME_PROPAGATION_DELAY_MS` | `30000` | 自动写入 TXT 后的首次传播等待时间 |
+| `VENDOR_CERTIFICATE_SCHEDULER_INTERVAL_MS` | `30000` | 厂商证书订单调度器轮询间隔 |
+| `CERTIFICATE_DEPLOY_SCHEDULER_INTERVAL_MS` | `30000` | 证书部署调度器轮询间隔 |
 | `SMTP_HOST` | - | SMTP 主机（未在设置中配置 SMTP 时必填） |
 | `SMTP_PORT` | `587` | SMTP 端口 |
 | `SMTP_SECURE` | `false` | 是否使用 SMTPS（465） |
@@ -383,6 +449,9 @@ curl http://localhost:3000/health  # 测试健康检查
 .
 ├── client/                           # 前端（React + Vite）
 │   └── src/
+│       ├── pages/Certificates.tsx    #   证书中心页
+│       ├── components/Certificates/  #   证书中心组件
+│       ├── services/certificates.ts  #   证书 API 调用
 │       ├── pages/Tunnels.tsx         #   Tunnels 列表页
 │       ├── components/Tunnels/       #   Tunnels 组件
 │       │   ├── TunnelDetailsPanel.tsx #     详情面板（副本/路由/安装指引）
@@ -390,11 +459,24 @@ curl http://localhost:3000/health  # 测试健康检查
 │       └── services/tunnels.ts       #   Tunnels API 调用
 ├── server/                           # 后端（Express + Prisma）
 │   └── src/
+│       ├── routes/certificates.ts    #   证书订单 API
+│       ├── routes/certificateCredentials.ts # ACME 账户 API
+│       ├── routes/certificateDeploy.ts #   证书部署（目标/任务）API
+│       ├── routes/vendorCertificates.ts #   厂商证书订单 API
+│       ├── routes/certificateAliases.ts #   CNAME Alias API
+│       ├── services/cert/            #   ACME / DNS-01 / 订单服务
+│       ├── jobs/certificateOrderScheduler.ts # 证书调度器
+│       ├── jobs/certificateRenewalScheduler.ts # 自动续期调度器
+│       ├── jobs/vendorCertificateScheduler.ts # 厂商证书调度器
+│       ├── jobs/certificateDeployScheduler.ts # 部署调度器
 │       ├── routes/tunnels.ts         #   Tunnels REST API（~1000 行）
 │       └── services/cloudflare.ts    #   Cloudflare API 封装
 ├── docker-compose.yml                # Docker Compose 配置
 ├── Dockerfile                        # 多阶段构建（前后端一体）
-└── .env.example                      # 环境变量示例
+├── .env.example                      # 环境变量示例
+├── 快速启动指南.md                   # 快速部署指南
+├── CERTIFICATE_PLAN.md               # 证书中心规划
+└── GEMINI_CERTIFICATE_PLAN_REVIEW.md # Gemini 规划评估
 ```
 
 ---

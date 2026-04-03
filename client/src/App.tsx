@@ -10,6 +10,7 @@ import CustomHostnames from './pages/CustomHostnames';
 import Tunnels from './pages/Tunnels';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
+import Certificates from './pages/Certificates';
 
 import { BreadcrumbProvider } from './contexts/BreadcrumbContext';
 
@@ -53,6 +54,7 @@ function App() {
         <Route path="tunnels/:zoneId" element={<Tunnels />} />
         <Route path="logs" element={<Logs />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="certificates" element={<Certificates />} />
       </Route>
 
       {/* 404 重定向 */}

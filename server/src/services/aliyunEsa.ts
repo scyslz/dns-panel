@@ -1047,3 +1047,38 @@ export async function getEsaCertificate(
     requestId: resp?.RequestId ? String(resp.RequestId) : undefined,
   };
 }
+
+export async function setEsaCertificate(
+  auth: AliyunAuth,
+  input: {
+    region?: string;
+    siteId: string;
+    certificate: string;
+    privateKey: string;
+    type?: 'upload' | 'cas';
+    name?: string;
+    certificateId?: string;
+    casId?: string;
+  }
+): Promise<{ certificateId: string; requestId?: string }> {
+  const resp: any = await requestEsa<any>(
+    auth,
+    'SetCertificate',
+    {
+      SiteId: input.siteId,
+      Type: input.type || 'upload',
+      Name: input.name,
+      Certificate: input.certificate,
+      PrivateKey: input.privateKey,
+      Id: input.certificateId,
+      CasId: input.casId,
+      Region: input.region,
+    },
+    { region: input.region }
+  );
+
+  return {
+    certificateId: String(resp?.Id || input.certificateId || '').trim(),
+    requestId: resp?.RequestId ? String(resp.RequestId) : undefined,
+  };
+}
