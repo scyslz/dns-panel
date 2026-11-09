@@ -21,6 +21,8 @@ export enum ProviderType {
   POWERDNS = 'powerdns',
   SPACESHIP = 'spaceship',
   UCLOUD = 'ucloud',
+  // 非 DNS 解析服务商：仅复用 DnsCredential 存储腾讯云 EdgeOne 站点密钥
+  EDGEONE = 'edgeone',
 }
 
 /**

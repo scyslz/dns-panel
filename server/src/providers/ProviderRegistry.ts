@@ -26,6 +26,34 @@ import {
 } from './base/types';
 
 /**
+ * 仅用于「复用 DnsCredential 存储」的非 DNS 服务商能力声明。
+ * 不注册到 providerMap：这类凭证不参与 DNS 记录操作，也不需要 checkAuth()。
+ */
+const EDGEONE_CAPABILITIES: ProviderCapabilities = {
+  provider: ProviderType.EDGEONE,
+  name: 'EdgeOne',
+  supportsWeight: false,
+  supportsLine: false,
+  supportsStatus: false,
+  supportsRemark: false,
+  supportsUrlForward: false,
+  supportsLogs: false,
+  remarkMode: 'unsupported',
+  paging: 'client',
+  requiresDomainId: false,
+  recordTypes: [],
+  authFields: [
+    { name: 'secretId', label: 'SecretId', type: 'text', required: true, placeholder: '腾讯云 API SecretId' },
+    { name: 'secretKey', label: 'SecretKey', type: 'password', required: true, placeholder: '腾讯云 API SecretKey' },
+    { name: 'token', label: '临时 Token（可选）', type: 'password', required: false, helpText: '仅 STS 临时密钥需要填写' },
+  ],
+  domainCacheTtl: 300,
+  recordCacheTtl: 120,
+  retryableErrors: [],
+  maxRetries: 0,
+};
+
+/**
  * Provider 初始化参数
  */
 export interface ProviderInit {
@@ -76,6 +104,7 @@ export class ProviderRegistry {
    * 提供商能力配置映射
    */
   private static readonly capabilitiesMap: Record<string, ProviderCapabilities> = {
+    [ProviderType.EDGEONE]: EDGEONE_CAPABILITIES,
     [ProviderType.CLOUDFLARE]: CLOUDFLARE_CAPABILITIES,
     [ProviderType.ALIYUN]: ALIYUN_CAPABILITIES,
     [ProviderType.DNSPOD]: DNSPOD_CAPABILITIES,
@@ -100,9 +129,14 @@ export class ProviderRegistry {
   }
 
   /**
-   * 检查提供商是否支持
+   * 检查提供商是否支持（包含在「注册为 DNS Provider」或「仅凭证存储」的 capability 中）
    */
   static isSupported(provider: ProviderType): boolean {
+    return provider in this.providerMap || provider in this.capabilitiesMap;
+  }
+
+  /** 是否为可操作 DNS 记录的真实 Provider（用于 verify / 域名列表等场景） */
+  static isDnsProvider(provider: ProviderType): boolean {
     return provider in this.providerMap;
   }
 
@@ -115,6 +149,11 @@ export class ProviderRegistry {
       throw new Error(`不支持的提供商: ${provider}`);
     }
     return caps;
+  }
+
+  /** 容错版本：未知 provider 返回 null（供列表展示使用） */
+  static getCapabilitiesSafe(provider: ProviderType): ProviderCapabilities | null {
+    return this.capabilitiesMap[provider] || null;
   }
 
   /**

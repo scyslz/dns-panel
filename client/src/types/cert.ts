@@ -502,7 +502,7 @@ export const DEPLOY_TARGET_TYPE_LABELS: Record<DeployTargetType, string> = {
   onepanel: '1Panel',
   nginx_proxy_manager: 'Nginx Proxy Manager',
   tencent_cdn: '腾讯云 CDN',
-  tencent_edgeone: '腾讯云 EdgeOne',
+  tencent_edgeone: 'EdgeOne',
   tencent_clb: '腾讯云 CLB',
   tencent_cos: '腾讯云 COS',
   tencent_tke: '腾讯云 TKE',

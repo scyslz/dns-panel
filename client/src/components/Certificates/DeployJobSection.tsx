@@ -299,7 +299,7 @@ export default function DeployJobSection() {
             placeholder="搜索证书 / 目标 / 绑定..."
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: { xs: 'stretch', sm: 'flex-end' } }}>
-            <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadData} disabled={loading} sx={{ whiteSpace: 'nowrap', flex: { xs: 1, sm: 'none' } }}>
+            <Button startIcon={<RefreshIcon />} variant="outlined" onClick={() => { void loadData(); }} disabled={loading} sx={{ whiteSpace: 'nowrap', flex: { xs: 1, sm: 'none' } }}>
               刷新列表
             </Button>
             <Button

@@ -86,9 +86,9 @@ router.get('/', async (req, res) => {
       },
     });
 
-    // 添加提供商显示名称
+    // 添加提供商显示名称（未知 provider 时回退为原始字符串，避免整列表报错）
     const credentialsWithMeta = credentials.map(cred => {
-      const caps = ProviderRegistry.getCapabilities(cred.provider as ProviderType);
+      const caps = ProviderRegistry.getCapabilitiesSafe(cred.provider as ProviderType);
       return {
         ...cred,
         providerName: caps?.name || cred.provider,
@@ -242,7 +242,7 @@ router.post('/', async (req, res) => {
       })),
     });
 
-    const caps = ProviderRegistry.getCapabilities(provider as ProviderType);
+    const caps = ProviderRegistry.getCapabilitiesSafe(provider as ProviderType);
     return successResponse(res, {
       credential: { ...credential, providerName: caps?.name || provider },
     }, '凭证创建成功', 201);
@@ -366,7 +366,7 @@ router.put('/:id', async (req, res) => {
       }),
     });
 
-    const caps = ProviderRegistry.getCapabilities(credential.provider as ProviderType);
+    const caps = ProviderRegistry.getCapabilitiesSafe(credential.provider as ProviderType);
     return successResponse(res, {
       credential: { ...credential, providerName: caps?.name || credential.provider },
     }, '凭证更新成功');
@@ -477,6 +477,13 @@ router.post('/:id/verify', async (req, res) => {
     }
 
     const secrets = JSON.parse(decrypt(credential.secrets));
+
+    // 非 DNS 服务商（如 EdgeOne）只复用本表存密钥，没有可 checkAuth 的 Provider；
+    // 请在对应功能页做连通性验证（/api/tencent-edgeone/credentials/:id/verify）。
+    if (!ProviderRegistry.isDnsProvider(credential.provider as ProviderType)) {
+      return successResponse(res, { valid: true, skipCheck: true }, '该凭证类型无需 DNS 校验，请在对应功能页验证');
+    }
+
     const providerInstance = ProviderRegistry.createProvider({
       provider: credential.provider as ProviderType,
       secrets,

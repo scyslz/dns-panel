@@ -13,6 +13,7 @@ import logRoutes from './routes/logs';
 import dnsCredentialRoutes from './routes/dnsCredentials';
 import dnsRecordRoutes from './routes/dnsRecords';
 import aliyunEsaRoutes from './routes/aliyunEsa';
+import tencentEdgeOneRoutes from './routes/tencentEdgeOne';
 import domainExpiryRoutes from './routes/domainExpiry';
 import tunnelRoutes from './routes/tunnels';
 import { startDomainExpiryScheduler } from './jobs/domainExpiryScheduler';
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dns-credentials', dnsCredentialRoutes); // 新版多提供商凭证
 app.use('/api/dns-records', dnsRecordRoutes);        // 新版多提供商 DNS 路由
 app.use('/api/aliyun-esa', aliyunEsaRoutes);         // 阿里云 ESA 站点管理
+app.use('/api/tencent-edgeone', tencentEdgeOneRoutes); // 腾讯云 EdgeOne 站点接入 + DNSPod 自动同步
 app.use('/api/hostnames', hostnameRoutes);
 app.use('/api/tunnels', tunnelRoutes);
 app.use('/api/logs', logRoutes);

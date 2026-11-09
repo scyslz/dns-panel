@@ -4,6 +4,7 @@ import {
   Apps as AllIcon,
 } from '@mui/icons-material';
 import { useProvider } from '@/contexts/ProviderContext';
+import { isNonDnsProvider } from '@/contexts/ProviderContext';
 import { getProviderIcon } from '@/components/Settings/ProviderSelector';
 
 export default function ProviderAccountTabs({
@@ -37,7 +38,7 @@ export default function ProviderAccountTabs({
   }
 
   const accounts = mode === 'all'
-    ? credentials
+    ? credentials.filter(c => !isNonDnsProvider(c.provider))
     : selectedProvider
       ? getCredentialsByProvider(selectedProvider)
       : [];
@@ -59,10 +60,13 @@ export default function ProviderAccountTabs({
     }
   };
 
+  const rawValue = (value ?? selectedCredentialId) || 'all';
+  const tabValue = typeof rawValue === 'number' && !accounts.some((a) => a.id === rawValue) ? 'all' : rawValue;
+
   return (
     <Box sx={{ width: '100%', bgcolor: 'background.paper', pt: 1 }}>
       <Tabs
-        value={(value ?? selectedCredentialId) || 'all'}
+        value={tabValue}
         onChange={handleChange}
         variant="scrollable"
         scrollButtons="auto"

@@ -57,6 +57,9 @@ function App() {
         <Route path="certificates" element={<Certificates />} />
       </Route>
 
+      {/* 旧 EdgeOne 独立页面已并入 DNS 服务商列表 */}
+      <Route path="/edgeone" element={<Navigate to="/" replace />} />
+
       {/* 404 重定向 */}
       <Route path="*" element={<Navigate to="/?scope=all" replace />} />
     </Routes>

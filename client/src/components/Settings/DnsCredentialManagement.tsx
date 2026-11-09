@@ -195,6 +195,17 @@ const PROVIDER_CREDENTIAL_GUIDE: Record<ProviderType, { title: string; steps: st
       '复制 API Key 和 API Secret'
     ],
     link: 'https://www.spaceship.com/'
+  },
+  edgeone: {
+    title: 'EdgeOne 凭证获取方式',
+    steps: [
+      '登录腾讯云控制台 → 访问管理 → 访问密钥 → API 密钥管理',
+      '创建或查看 SecretId / SecretKey',
+      '为该密钥授予 EdgeOne（teo）站点与 DNS 记录相关权限',
+      '在左侧「EdgeOne」中选择该账户即可管理站点',
+      '同一把密钥若也托管了 DNSPod 域名，CNAME 会自动同步'
+    ],
+    link: 'https://console.cloud.tencent.com/cam/capi'
   }
 };
 
@@ -382,6 +393,13 @@ export default function DnsCredentialManagement() {
 
         if (hasLegacyAny && !hasLegacyValid) {
           setSubmitError('DNSPod Token 请填写 ID + Token，或在 Token 中填入组合格式：ID,Token');
+          return;
+        }
+      }
+
+      if (selectedProviderType === 'edgeone' && !editingCredential) {
+        if (!secretsToSubmit.secretId || !secretsToSubmit.secretKey) {
+          setSubmitError('EdgeOne 凭证需要同时填写 SecretId 和 SecretKey');
           return;
         }
       }

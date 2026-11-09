@@ -79,11 +79,12 @@ import dayjs from 'dayjs';
 import { Domain } from '@/types';
 import { ProviderType } from '@/types/dns';
 import DnsManagement from '@/components/DnsManagement/DnsManagement';
+import EdgeOnePanel from '@/pages/EdgeOne';
 import ProviderAccountTabs from '@/components/Dashboard/ProviderAccountTabs';
 import AddZoneDialog from '@/components/Dashboard/AddZoneDialog';
 import AddEsaSiteDialog from '@/components/Dashboard/AddEsaSiteDialog';
 import EsaRecordManagement from '@/components/Dashboard/EsaRecordManagement';
-import { useProvider } from '@/contexts/ProviderContext';
+import { useProvider, isNonDnsProvider } from '@/contexts/ProviderContext';
 import { getProviderIcon } from '@/components/Settings/ProviderSelector';
 
 const DOMAINS_PER_PAGE_STORAGE_KEY = 'dns_domains_per_page';
@@ -104,6 +105,7 @@ const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: stri
   namesilo: { icon: <NamesiloIcon />, color: '#2196f3', name: 'NameSilo' },
   powerdns: { icon: <PowerdnsIcon />, color: '#333333', name: 'PowerDNS' },
   spaceship: { icon: <SpaceshipIcon />, color: '#7e57c2', name: 'Spaceship' },
+  edgeone: { icon: <EsaIcon />, color: '#0052d9', name: 'EdgeOne' },
 };
 
 export default function Dashboard() {
@@ -128,6 +130,7 @@ export default function Dashboard() {
   const [allScopeCredentialId, setAllScopeCredentialId] = useState<number | 'all'>('all');
 
   const { selectedCredentialId, selectedProvider, credentials, getCredentialsByProvider, selectProvider } = useProvider();
+  const isEdgeOneProvider = !isAllScope && selectedProvider === 'edgeone';
 
   const allScopeSelectedCredential = useMemo(() => {
     if (!isAllScope) return null;
@@ -232,10 +235,10 @@ export default function Dashboard() {
 
   const addZoneCredentials = isAllScope ? zoneManageCredentials : currentProviderCredentials;
 
-  const showAddZone = isAllScope ? true : isZoneManageProvider(selectedProvider);
+  const showAddZone = !isEdgeOneProvider && (isAllScope ? true : isZoneManageProvider(selectedProvider));
   const canShowEsaPanel = selectedProvider === 'aliyun' || (isAllScope && isAllScopeAliyunCredential);
   const isEsaPanel = canShowEsaPanel && aliyunPanel === 'esa';
-  const listTitle = isEsaPanel ? '站点' : '域名';
+  const listTitle = isEdgeOneProvider ? '站点' : isEsaPanel ? '站点' : '域名';
   const searchPlaceholder = isEsaPanel ? '搜索站点...' : '搜索域名...';
   const tunnelsCredentialId = useMemo(() => {
     if (isAllScope) {
@@ -407,19 +410,20 @@ export default function Dashboard() {
       }
 
       if (isAllScope) {
-        if (credentials.length === 0) {
+        const dnsCredentials = credentials.filter(c => !isNonDnsProvider(c.provider));
+        if (dnsCredentials.length === 0) {
           return { data: { domains: [] } };
         }
 
         if (allScopeCredentialId === 'all') {
           const results = await Promise.allSettled(
-            credentials.map(cred => getDomains(cred.id))
+            dnsCredentials.map(cred => getDomains(cred.id))
           );
 
           const allDomains: Domain[] = [];
           results.forEach((result, index) => {
             if (result.status === 'fulfilled' && result.value.data?.domains) {
-              const cred = credentials[index];
+              const cred = dnsCredentials[index];
               const credentialName = cred.name;
 
               result.value.data.domains.forEach(domain => {
@@ -436,7 +440,11 @@ export default function Dashboard() {
           return { data: { domains: allDomains } };
         }
 
-        return getDomains(allScopeCredentialId);
+        if (typeof allScopeCredentialId === 'number'
+          && dnsCredentials.some(c => c.id === allScopeCredentialId)) {
+          return getDomains(allScopeCredentialId);
+        }
+        return { data: { domains: [] } };
       }
 
       if (!selectedProvider || currentProviderCredentials.length === 0) {
@@ -478,8 +486,8 @@ export default function Dashboard() {
       return getDomains(safeSelectedCredentialId);
     },
     enabled: isAllScope
-      ? credentials.length > 0
-      : !!selectedProvider && currentProviderCredentials.length > 0,
+      ? credentials.some(c => !isNonDnsProvider(c.provider))
+      : !!selectedProvider && selectedProvider !== 'edgeone' && currentProviderCredentials.length > 0,
   });
 
   useEffect(() => {
@@ -494,15 +502,19 @@ export default function Dashboard() {
   }, [searchTerm]);
 
   const handleRefresh = async () => {
+    if (isEdgeOneProvider) return;
+
     if (isEsaPanel) {
       refetch();
       return;
     }
 
     if (isAllScope) {
+      const dnsCredentials = credentials.filter(c => !isNonDnsProvider(c.provider));
       if (allScopeCredentialId === 'all') {
-        await Promise.all(credentials.map(c => refreshDomains(c.id)));
-      } else {
+        await Promise.all(dnsCredentials.map(c => refreshDomains(c.id)));
+      } else if (typeof allScopeCredentialId === 'number'
+        && dnsCredentials.some(c => c.id === allScopeCredentialId)) {
         await refreshDomains(allScopeCredentialId);
       }
       refetch();
@@ -1518,6 +1530,10 @@ export default function Dashboard() {
         </Box>
 
         <CardContent sx={{ p: isMobile ? 0 : 3 }}>
+          {isEdgeOneProvider ? (
+            <EdgeOnePanel credentialId={selectedCredentialId} />
+          ) : (
+            <>
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={2}
@@ -1646,6 +1662,8 @@ export default function Dashboard() {
                   mt: 1,
                 }}
               />
+            </>
+          )}
             </>
           )}
         </CardContent>

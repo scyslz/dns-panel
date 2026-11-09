@@ -33,7 +33,8 @@ import {
   Settings as SettingsIcon,
   Dashboard as DashboardIcon,
   History as HistoryIcon,
-  WorkspacePremium as CertificateIcon
+  WorkspacePremium as CertificateIcon,
+  Security as EdgeOneIcon
 } from '@mui/icons-material';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProvider } from '@/contexts/ProviderContext';
@@ -56,11 +57,12 @@ const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: stri
   namesilo: { icon: <NamesiloIcon />, color: '#2196f3', name: 'NameSilo' },
   powerdns: { icon: <PowerdnsIcon />, color: '#333333', name: 'PowerDNS' },
   spaceship: { icon: <SpaceshipIcon />, color: '#7e57c2', name: 'Spaceship' },
+  edgeone: { icon: <EdgeOneIcon />, color: '#0052d9', name: 'EdgeOne' },
 };
 
 const PROVIDER_ORDER: ProviderType[] = [
   'cloudflare', 'aliyun', 'dnspod', 'ucloud', 'huawei', 'baidu', 'west',
-  'huoshan', 'jdcloud', 'dnsla', 'namesilo', 'powerdns', 'spaceship',
+  'huoshan', 'jdcloud', 'dnsla', 'namesilo', 'powerdns', 'spaceship', 'edgeone',
 ];
 
 const DEFAULT_PROVIDER_STYLE = {

@@ -27,6 +27,9 @@ const normalizeProviderType = (provider: ProviderType): ProviderType => {
   return provider === 'dnspod_token' ? 'dnspod' : provider;
 };
 
+/** EdgeOne 复用凭证表，但站点由独立面板管理，不参与通用 DNS 域名列表 */
+export const isNonDnsProvider = (provider: ProviderType): boolean => provider === 'edgeone';
+
 export function ProviderProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [credentials, setCredentials] = useState<DnsCredential[]>([]);
@@ -57,12 +60,13 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
         const savedProvider = savedProviderRaw ? normalizeProviderType(savedProviderRaw) : null;
         const savedCredential = localStorage.getItem(STORAGE_KEY_CREDENTIAL);
 
-        // 获取有凭证的提供商列表
-        const providersWithCreds = [...new Set(credentialList.map(c => normalizeProviderType(c.provider)))];
+        // 已保存的选择（含 EdgeOne）要能恢复；仅在没有有效选择时，默认落到真实 DNS 提供商
+        const allProviderTypes = [...new Set(credentialList.map(c => normalizeProviderType(c.provider)))];
+        const dnsProviderTypes = allProviderTypes.filter(t => !isNonDnsProvider(t));
 
-        const providerToSelect = (savedProvider && providersWithCreds.includes(savedProvider))
+        const providerToSelect = (savedProvider && allProviderTypes.includes(savedProvider))
           ? savedProvider
-          : (providersWithCreds.length > 0 ? providersWithCreds[0] : null);
+          : (dnsProviderTypes.length > 0 ? dnsProviderTypes[0] : null);
 
         setSelectedProvider(providerToSelect);
         if (providerToSelect) {
@@ -70,7 +74,9 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
         }
 
         const credsForProvider = providerToSelect
-          ? credentialList.filter(c => normalizeProviderType(c.provider) === providerToSelect)
+          ? (isNonDnsProvider(providerToSelect)
+            ? credentialList.filter(c => c.provider === providerToSelect)
+            : credentialList.filter(c => !isNonDnsProvider(c.provider) && normalizeProviderType(c.provider) === providerToSelect))
           : [];
 
         let nextCredential: number | 'all' | null = null;
@@ -124,7 +130,9 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
 
     const normalizedProvider = normalizeProviderType(provider);
 
-    const credsForProvider = credentials.filter(c => normalizeProviderType(c.provider) === normalizedProvider);
+    const credsForProvider = isNonDnsProvider(normalizedProvider)
+      ? credentials.filter(c => c.provider === normalizedProvider)
+      : credentials.filter(c => !isNonDnsProvider(c.provider) && normalizeProviderType(c.provider) === normalizedProvider);
     const nextCredential: number | 'all' = credsForProvider.length > 1
       ? 'all'
       : credsForProvider.length === 1
@@ -144,8 +152,9 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getCredentialsByProvider = useCallback((provider: ProviderType) => {
+    if (isNonDnsProvider(provider)) return credentials.filter(c => c.provider === provider);
     const p = normalizeProviderType(provider);
-    return credentials.filter(c => normalizeProviderType(c.provider) === p);
+    return credentials.filter(c => !isNonDnsProvider(c.provider) && normalizeProviderType(c.provider) === p);
   }, [credentials]);
 
   const getCredentialCountByProvider = useCallback((provider: ProviderType) => {
@@ -155,8 +164,8 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
 
   const getProviderCapabilities = useCallback((provider?: ProviderType | null): ProviderCapabilities | null => {
     const raw = provider ?? selectedProvider;
-    const p = raw ? normalizeProviderType(raw) : null;
-    if (!p) return null;
+    if (!raw || isNonDnsProvider(raw)) return null;
+    const p = normalizeProviderType(raw);
     const config = providers.find(c => c.type === p);
     return config?.capabilities ?? null;
   }, [providers, selectedProvider]);

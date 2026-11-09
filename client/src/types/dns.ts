@@ -12,7 +12,9 @@ export type ProviderType =
   | 'dnsla'
   | 'namesilo'
   | 'powerdns'
-  | 'spaceship';
+  | 'spaceship'
+  // 非 DNS 服务商：仅复用同一张凭证表存放 EdgeOne 密钥
+  | 'edgeone';
 
 export interface DnsCredential {
   id: number;

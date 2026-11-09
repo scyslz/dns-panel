@@ -28,6 +28,7 @@
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
+| v1.8.0 | 2026-11-09 | ✨ 支持 NS EdgeOne（1 站点 = 1 域名），加速域名增删改自动同步 CNAME 到腾讯云 DNSPod |
 | v1.7.0 | 2026-03-31 | 🔐 新增证书中心（ACME/订单/自动续期/部署矩阵/通知）+ 域名到期手动设置 |
 | v1.6.0 | 2026-03-24 | ✨ 新增 ESA 自动 DNS 配置、全提供商权威 DNS 识别、非权威域名显示开关 |
 | v1.5.0 | 2026-03-02 | 🆕 新增 Cloudflare Tunnels 管理：隧道创建/删除、详情面板、cloudflared 安装指引、三类路由管理（Public Hostnames / CIDR / 主机名路由） |
@@ -40,6 +41,9 @@
 
 <details>
 <summary><b>查看完整更新日志</b></summary>
+
+### v1.8.0 (2026-11-09)
+- ✨ 支持 NS EdgeOne：1 站点 = 1 域名，加速域名增删改自动同步 CNAME 到腾讯云 DNSPod
 
 ### v1.7.0 (2026-03-31)
 - 🔐 **新增通用证书中心（Certificate Center）**
@@ -145,6 +149,7 @@
 |------|------|
 | 🌐 多服务商支持 | 统一管理多个 DNS 服务商的域名和解析记录 |
 | ⚡ ESA 自动 DNS | 自动创建 ESA 验证 TXT / 业务 CNAME；多候选时支持人工确认目标主域名 |
+| ☁️ NS EdgeOne | 加速域名管理（1 站点 = 1 域名）、复用现有凭证体系、CNAME 自动同步到 DNSPod |
 | 🧭 权威 DNS 识别 | 统一识别域名是否为当前托管方权威 DNS，区分 authoritative / pending / non_authoritative / unknown |
 | 🧾 解析记录管理 | 增删改查；支持权重/线路/启停/备注等 |
 | 🔐 通用证书中心 | ACME 账户管理、证书订单管理、DNS-01 自动验证、自动续期、Webhook / Dokploy / 1Panel / NPM 等部署目标、证书下载 |

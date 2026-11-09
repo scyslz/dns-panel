@@ -12,6 +12,7 @@ import {
   Label,
   PowerSettingsNew,
   RocketLaunch,
+  Security,
 } from '@mui/icons-material';
 import { ProviderConfig, ProviderType } from '@/types/dns';
 
@@ -36,6 +37,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   namesilo: '#2196f3',
   powerdns: '#333333',
   spaceship: '#7e57c2',
+  edgeone: '#0052d9',
 };
 
 export const getProviderIcon = (type: string, size: 'small' | 'large' = 'large') => {
@@ -71,6 +73,8 @@ export const getProviderIcon = (type: string, size: 'small' | 'large' = 'large')
       return <PowerSettingsNew fontSize={fontSize} sx={sx} />;
     case 'spaceship':
       return <RocketLaunch fontSize={fontSize} sx={sx} />;
+    case 'edgeone':
+      return <Security fontSize={fontSize} sx={sx} />;
     default:
       return <Language fontSize={fontSize} sx={sx} />;
   }

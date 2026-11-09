@@ -645,7 +645,7 @@ const DEPLOY_TARGET_TYPES: Record<CertificateDeployTargetType, DeployTargetTypeD
   },
   tencent_edgeone: {
     type: 'tencent_edgeone',
-    label: '腾讯云 EdgeOne',
+    label: 'EdgeOne',
     supportsResourceDiscovery: true,
     supportsTest: true,
     configFields: [
