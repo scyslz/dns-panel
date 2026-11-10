@@ -17,6 +17,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   IMAGE_NAME: scyslz/dns-panel
@@ -203,6 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Resolve version
         id: version
