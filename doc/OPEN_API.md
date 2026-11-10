@@ -1,11 +1,10 @@
-# DNS Panel 开放 API
+# Open API
 
 面向程序调用的 DNS 管理接口。与页面接口（`/api/*` + JWT）完全分离，使用 API Key 认证。
 
 - 基础路径：`/api/open`
 - 认证：`Authorization: Bearer dns_live_...`（也支持 `X-API-Key`）
 - 响应：统一 JSON 信封，带 `requestId`
-- 文档对应设计：`DNS_API_DESIGN.md`
 
 ---
 
@@ -29,6 +28,10 @@ npx tsx src/scripts/create-api-key.ts --user <用户名> --name deploy \
 
 Key 只显示一次，格式为 `dns_live_<keyId>_<secret>`。
 
+- `keyId` 明文存储并建唯一索引，用于快速定位；`secret` 只存 `sha256(secret + API_KEY_PEPPER)` 哈希
+- 之后列表只显示 `dns_live_<keyId>_****<suffix>`，明文无法再次查看
+- 支持 `expiresAt` 过期、`revokedAt` 吊销（软删保留审计），并记录 `lastUsedAt` / `lastUsedIp`
+
 **方式 B：管理接口（登录态 JWT）**
 
 ```http
@@ -49,7 +52,7 @@ POST /api/api-keys
 | POST | `/api/api-keys` | 创建（明文只返回一次） |
 | DELETE | `/api/api-keys/:id` | 吊销（立即生效） |
 
-也可以直接到 **设置 → API Key** 管理：生成、查看使用情况、吊销。界面右上角「文档」或左侧边栏的 API 文档图标可打开 `/docs` 参考页。
+也可以直接到 **设置 → API Key** 管理：生成、查看使用情况、吊销。卡片底部「API 文档」可打开 `/docs` 参考页。
 
 ### 1.2 验证
 
@@ -57,12 +60,18 @@ POST /api/api-keys
 curl -s -H "Authorization: Bearer dns_live_xxx" https://panel.example.com/api/open/me
 ```
 
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/open/me` | 当前 Key 信息、绑定凭证、白名单与限流配置 |
+
 ### 1.3 权限模型
 
 **API Key 与账号完全绑定，拥有该 User 的全部权限**，不再细分 scope。
 
 - 同一个 Key 可以操作该账号下所有 DNS 凭证与 EdgeOne
 - 需要缩小范围时用 `credentialId` 绑定单个凭证，或 `allowedDomains` / `allowedIps` 白名单
+- `allowedDomains` 在解析出 zone 之后校验，匹配的是 zone 名而不是任意子域名；支持 `*.example.com` 通配
+- `allowedIps` 支持 CIDR（如 `10.0.0.0/8`）与单 IP，为空表示不限制
 - Key 泄露等于账号 DNS 权限泄露，请按用途分开生成并在不使用时吊销
 
 ---
@@ -149,6 +158,13 @@ curl -s -H "Authorization: Bearer dns_live_xxx" https://panel.example.com/api/op
 ## 3. DNS 记录
 
 域名优先寻址：传 `example.com` 或 `www.example.com` 都可以，服务端解析到对应 zone，调用方无需知道厂商的 `zoneId`。
+
+解析与记录名规则：
+
+- 域名先归一化（小写、去末尾点、去协议/路径、IDN 转 punycode），再按最长后缀匹配 zone
+- 匹配不到返回 `404 ZONE_NOT_FOUND`，`details.suggestions` 给出最多 5 个候选
+- 记录名 `@` / 空串表示根记录；传完整 FQDN 会自动截断为相对名（`www.example.com` → `www`）
+- `*` 泛解析保留；单个 label ≤ 63 字符，总长 ≤ 253；允许 `_acme-challenge`、`_dmarc` 等下划线前缀
 
 ### 3.1 端点
 

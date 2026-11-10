@@ -3,11 +3,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, Divider,
   DialogContent, DialogTitle, FormControlLabel, IconButton, InputAdornment, Menu, MenuItem, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
+  Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField,
   Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import {
-  Add as AddIcon, CheckCircle as CheckIcon, CloudSync as SyncIcon, ContentCopy as CopyIcon,
+  Add as AddIcon, CheckCircle as CheckIcon, CloudSync as SyncIcon,
   Delete as DeleteIcon, Edit as EditIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon,
   MoreVert as MoreVertIcon, PauseCircleOutline as PauseIcon, PlayCircleOutline as ResumeIcon,
   Refresh as RefreshIcon, Search as SearchIcon, Security as EdgeOneIcon,
@@ -21,6 +21,7 @@ import {
   type HostHeaderMode,
 } from '@/services/tencentEdgeOne';
 import { useProvider } from '@/contexts/ProviderContext';
+import { alpha, type Theme } from '@mui/material/styles';
 
 const errorText = (err: unknown) => String((err as any)?.message || err || '操作失败');
 
@@ -84,23 +85,6 @@ function originDetail(d: EdgeOneDomain): string {
   return `${d.origin || '-'} · ${ports} · Host ${d.hostHeader || '-'}`;
 }
 
-/** 操作提示用浮层展示，避免在表格上方插入 Alert 导致列表跳动「闪一下」 */
-function FloatingNotice({ notice, onClose }: { notice: Notice | null; onClose: () => void }) {
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => closeRef.current(), 6000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-  if (!notice) return null;
-  return (
-    <Box sx={{ position: 'fixed', right: { xs: 16, sm: 32 }, bottom: 24, zIndex: 1400, width: { xs: 'calc(100% - 32px)', sm: 400 } }}>
-      <Alert severity={notice.severity} onClose={onClose} sx={{ borderRadius: 2, boxShadow: 3 }}>{notice.text}</Alert>
-    </Box>
-  );
-}
-
 function siteStatus(site: EdgeOneSite) {
   const type = String(site.type || '').toLowerCase();
   if (site.paused || site.activeStatus === 'inactive' || site.status === 'deactivated') {
@@ -134,6 +118,27 @@ function dnspodTag(d: EdgeOneDomain) {
   return null;
 }
 
+/** 语义状态 Chip：alpha 背景 + 深色文字 + 600，符合 UI/UX 标准 2.3 / 7.6 */
+function statusChipSx(color: 'success' | 'warning' | 'info' | 'default') {
+  return (theme: Theme) => {
+    if (color === 'default') {
+      return {
+        bgcolor: alpha(theme.palette.text.secondary, 0.1),
+        color: theme.palette.text.secondary,
+        fontWeight: 600,
+        border: 'none',
+      };
+    }
+    const palette = theme.palette[color];
+    return {
+      bgcolor: alpha(palette.main, 0.1),
+      color: palette.dark,
+      fontWeight: 600,
+      border: 'none',
+    };
+  };
+}
+
 export interface EdgeOnePanelProps {
   /** 与 DNS 列表共用账户 Tab：'all' 表示全部 EdgeOne 账户 */
   credentialId: number | 'all' | null;
@@ -154,6 +159,11 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
 
   const [notice, setNotice] = useState<Notice | null>(null);
   const showNotice: ShowNotice = useCallback((severity, text) => setNotice({ severity, text }), []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedZone, setExpandedZone] = useState<string | null>(null);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
@@ -162,7 +172,6 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
   const [createdSite, setCreatedSite] = useState<CreateSiteResult | null>(null);
   const [deleteSite, setDeleteSite] = useState<EdgeOneSite | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [copied, setCopied] = useState<string | null>(null);
 
   const sitesQuery = useQuery({
     queryKey: ['edgeone', 'sites', activeIds.join(',')],
@@ -190,6 +199,18 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
     [sites, searchTerm],
   );
   useEffect(() => { setExpandedZone(null); }, [searchTerm]);
+
+  const [sitePage, setSitePage] = useState(0);
+  const siteRowsPerPage = 20;
+  useEffect(() => { setSitePage(0); }, [searchTerm, credentialId]);
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(filteredSites.length / siteRowsPerPage) - 1);
+    if (sitePage > maxPage) setSitePage(maxPage);
+  }, [filteredSites.length, siteRowsPerPage, sitePage]);
+  const pagedSites = useMemo(
+    () => filteredSites.slice(sitePage * siteRowsPerPage, sitePage * siteRowsPerPage + siteRowsPerPage),
+    [filteredSites, sitePage, siteRowsPerPage],
+  );
 
   const plansQuery = useQuery({
     queryKey: ['edgeone', 'plans', activeIds.join(',')],
@@ -235,11 +256,6 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
     onError: (err) => showNotice('error', errorText(err)),
   });
 
-  const copyText = async (key: string, text: string) => {
-    try { await navigator.clipboard.writeText(text); setCopied(key); window.setTimeout(() => setCopied(null), 1200); }
-    catch { showNotice('error', '复制失败，请手动选择文本复制'); }
-  };
-
   const openCreateSite = () => {
     setSiteForm({ domain: '', area: 'overseas', planId: '', credentialId: activeIds[0] || 0 });
     setCreatedSite(null); setSiteError(null); setSiteDialogOpen(true);
@@ -259,17 +275,23 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
           disabled={edgeOneCredentials.length === 0}
         />
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
+          <Button variant="contained" startIcon={<AddIcon />} disabled={edgeOneCredentials.length === 0} onClick={openCreateSite} sx={{ whiteSpace: 'nowrap' }}>
+            添加站点
+          </Button>
           <Button variant="outlined" startIcon={<RefreshIcon />}
             onClick={() => { void sitesQuery.refetch(); }}
             disabled={sitesQuery.isFetching || edgeOneCredentials.length === 0}
             sx={{ borderColor: 'divider', bgcolor: 'background.paper', color: 'text.secondary', '&:hover': { borderColor: 'primary.main', color: 'primary.main' } }}>
             {sitesQuery.isFetching ? '刷新中...' : '同步列表'}
           </Button>
-          <Button variant="contained" startIcon={<AddIcon />} disabled={edgeOneCredentials.length === 0} onClick={openCreateSite} sx={{ whiteSpace: 'nowrap' }}>
-            添加站点
-          </Button>
         </Stack>
       </Stack>
+
+      {notice ? (
+        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 2, borderRadius: 2 }}>
+          {notice.text}
+        </Alert>
+      ) : null}
 
       {partialErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>部分账户加载失败：{partialErrors[0]}</Alert>}
 
@@ -285,13 +307,13 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
       ) : (
         <>
           {isMobile ? (
-            <Stack spacing={1.5}>{filteredSites.map((site) => (
+            <Stack spacing={1.5}>{pagedSites.map((site) => (
               <SiteCard key={site.zoneId} site={site} expanded={expandedZone === site.zoneId}
                 status={siteStatus(site)}
                 onToggle={() => setExpandedZone(expandedZone === site.zoneId ? null : site.zoneId)}
                 onFullSync={() => fullSyncMutation.mutate(site)} onVerify={() => verifySiteMutation.mutate(site)}
                 onDelete={() => { setDeleteSite(site); setDeleteConfirm(''); }}
-                fullSyncPending={fullSyncMutation.isPending} copied={copied} onCopy={copyText}
+                fullSyncPending={fullSyncMutation.isPending}
                 showNotice={showNotice} />
             ))}</Stack>
           ) : (
@@ -300,28 +322,39 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
                 <TableHead><TableRow>
                   <TableCell width={44} />
                   <TableCell>站点域名</TableCell>
-                  <TableCell width={230}>Zone ID / 接入方式</TableCell>
-                  <TableCell width={190}>状态 / 区域</TableCell>
-                  <TableCell width={136} align="right">操作</TableCell>
+                  <TableCell>Zone ID / 接入方式</TableCell>
+                  <TableCell>状态 / 区域</TableCell>
+                  <TableCell align="right" />
                 </TableRow></TableHead>
-                <TableBody>{filteredSites.map((site) => (
+                <TableBody>{pagedSites.map((site) => (
                   <SiteRow key={site.zoneId} site={site} status={siteStatus(site)}
                     expanded={expandedZone === site.zoneId}
                     onToggle={() => setExpandedZone(expandedZone === site.zoneId ? null : site.zoneId)}
                     onFullSync={() => fullSyncMutation.mutate(site)} onVerify={() => verifySiteMutation.mutate(site)}
                     onDelete={() => { setDeleteSite(site); setDeleteConfirm(''); }}
-                    fullSyncPending={fullSyncMutation.isPending} copied={copied} onCopy={copyText}
+                    fullSyncPending={fullSyncMutation.isPending}
                     showNotice={showNotice} />
                 ))}</TableBody>
               </Table>
             </TableContainer>
           )}
 
+          {filteredSites.length > 0 ? (
+            <TablePagination
+              component="div"
+              count={filteredSites.length}
+              page={sitePage}
+              onPageChange={(_, page) => setSitePage(page)}
+              rowsPerPage={siteRowsPerPage}
+              rowsPerPageOptions={[siteRowsPerPage]}
+              labelRowsPerPage="每页显示"
+            />
+          ) : null}
         </>
       )}
 
       {/* 创建站点 */}
-      <Dialog open={siteDialogOpen} onClose={() => setSiteDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
+      <Dialog open={siteDialogOpen} onClose={() => setSiteDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>添加 EdgeOne 站点</DialogTitle>
         <DialogContent><Stack spacing={2.5} sx={{ mt: 1 }}>
           <Alert severity="info" sx={{ borderRadius: 2 }}>一个站点对应一个域名。已有 DNSPod 托管接入的站点无需重复创建，直接展开管理加速域名即可。</Alert>
@@ -350,15 +383,13 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
             <Typography variant="body2" sx={{ mt: 0.5 }}>Zone ID：{createdSite.zoneId}</Typography>
             {createdSite.nameServers.length > 0 && <Box sx={{ mt: 1 }}>
               <Typography variant="body2">请到域名注册商把 NS 改为：</Typography>
-              {createdSite.nameServers.map((ns) => <Stack key={ns} direction="row" alignItems="center" spacing={0.5}>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{ns}</Typography>
-                <IconButton size="small" onClick={() => copyText(ns, ns)}><CopyIcon fontSize="inherit" /></IconButton>
-              </Stack>)}
-              {copied && <Typography variant="caption" color="success.main">已复制 {copied}</Typography>}
+              {createdSite.nameServers.map((ns) => (
+                <Typography key={ns} variant="body2" sx={{ fontFamily: 'monospace' }}>{ns}</Typography>
+              ))}
             </Box>}
           </Alert>}
         </Stack></DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button color="inherit" onClick={() => setSiteDialogOpen(false)}>{createdSite ? '完成' : '取消'}</Button>
           {!createdSite && <Button variant="contained" onClick={() => createSiteMutation.mutate()} disabled={createSiteMutation.isPending}>
             {createSiteMutation.isPending ? '创建中...' : '创建站点'}
@@ -373,14 +404,13 @@ export default function EdgeOnePanel({ credentialId }: EdgeOnePanelProps) {
           <Typography variant="body2">请输入站点域名 <strong>{deleteSite?.zoneName}</strong> 以确认：</Typography>
           <TextField size="small" fullWidth value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder={deleteSite?.zoneName} />
         </Stack></DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button color="inherit" onClick={() => setDeleteSite(null)}>取消</Button>
           <Button color="error" variant="contained" disabled={deleteConfirm !== deleteSite?.zoneName || deleteSiteMutation.isPending}
             onClick={() => deleteSite && deleteSiteMutation.mutate(deleteSite)}>{deleteSiteMutation.isPending ? '删除中...' : '删除站点'}</Button>
         </DialogActions>
       </Dialog>
 
-      <FloatingNotice notice={notice} onClose={() => setNotice(null)} />
     </Box>
   );
 }
@@ -389,12 +419,11 @@ interface SiteActions {
   site: EdgeOneSite; status: ReturnType<typeof siteStatus>;
   expanded: boolean; onToggle: () => void; onFullSync: () => void;
   onVerify: () => void; onDelete: () => void; fullSyncPending: boolean;
-  copied: string | null; onCopy: (k: string, t: string) => void;
   showNotice: ShowNotice;
 }
 
 /** 移动端标签统一样式：同高、同字号、圆角一致 */
-const mobileTagSx = { height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } } as const;
+const mobileTagSx = { height: 22, fontSize: '0.72rem', '& .MuiChip-label': { px: 0.75 } } as const;
 
 /** 只用一个紧凑标签表示 DNSPod 关联，不再单独占一列 */
 function DnspodTag({ link }: { link: EdgeOneSite['dnspodLink'] }) {
@@ -408,13 +437,13 @@ function DnspodTag({ link }: { link: EdgeOneSite['dnspodLink'] }) {
 
 /** 移动端卡片：右上角 ⋮ 菜单，展开内容紧跟在当前卡片下方 */
 function SiteCard(props: SiteActions) {
-  const { site, status, expanded, onToggle, onFullSync, onVerify, onDelete, fullSyncPending, copied, onCopy, showNotice } = props;
+  const { site, status, expanded, onToggle, onFullSync, onVerify, onDelete, fullSyncPending, showNotice } = props;
   const link = site.dnspodLink;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const closeMenu = () => setMenuAnchor(null);
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 'none', borderColor: expanded ? 'primary.main' : 'divider' }}>
+    <Card sx={{ borderRadius: 2, border: expanded ? '1px solid' : 'none', borderColor: expanded ? 'primary.main' : 'divider' }}>
       <CardContent sx={{ p: 2, '&:last-child': { pb: expanded ? 0 : 2 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
           <Typography variant="subtitle1" fontWeight={600} sx={{ wordBreak: 'break-all', minWidth: 0 }}>
@@ -436,21 +465,15 @@ function SiteCard(props: SiteActions) {
         </Stack>
 
         <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-          <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={mobileTagSx} />
+          <Chip size="small" label={status.label} sx={[mobileTagSx, statusChipSx(status.color)]} />
           <DnspodTag link={link} />
           <Chip size="small" label={site.type} variant="outlined" sx={mobileTagSx} />
           <Chip size="small" label={areaLabel(site.area)} variant="outlined" sx={mobileTagSx} />
         </Stack>
 
-        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-            {site.zoneId}
-          </Typography>
-          <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onCopy(site.zoneId, site.zoneId)}>
-            <CopyIcon sx={{ fontSize: 14 }} />
-          </IconButton>
-          {copied === site.zoneId && <Typography variant="caption" color="success.main">已复制</Typography>}
-        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          {site.zoneId}
+        </Typography>
 
         {site.nameServers.length > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
@@ -485,7 +508,7 @@ function SiteCard(props: SiteActions) {
 
 /** 桌面端：展开行紧跟在当前站点行下方；站点表本身不横向滚动，域名表在自己的容器里滚动 */
 function SiteRow(props: SiteActions) {
-  const { site, status, expanded, onToggle, onFullSync, onVerify, onDelete, fullSyncPending, copied, onCopy, showNotice } = props;
+  const { site, status, expanded, onToggle, onFullSync, onVerify, onDelete, fullSyncPending, showNotice } = props;
   const link = site.dnspodLink;
   const [rowMenuAnchor, setRowMenuAnchor] = useState<HTMLElement | null>(null);
   const closeRowMenu = () => setRowMenuAnchor(null);
@@ -507,20 +530,12 @@ function SiteRow(props: SiteActions) {
           </Stack>
         </TableCell>
         <TableCell sx={cellSx}>
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
-            <Typography variant="body2" noWrap sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{site.zoneId}</Typography>
-            <Tooltip title="复制 Zone ID">
-              <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onCopy(site.zoneId, site.zoneId)}>
-                <CopyIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            </Tooltip>
-            {copied === site.zoneId && <Typography variant="caption" color="success.main">已复制</Typography>}
-          </Stack>
-          <Chip size="small" label={site.type} variant="outlined" sx={{ mt: 0.5, height: 20, fontSize: '0.7rem' }} />
+          <Typography variant="body2" noWrap sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{site.zoneId}</Typography>
+          <Chip size="small" label={site.type} variant="outlined" sx={{ mt: 0.5, height: 22, fontSize: '0.72rem' }} />
         </TableCell>
         <TableCell sx={cellSx}>
           <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 22 }} />
+            <Chip size="small" label={status.label} sx={[{ height: 22 }, statusChipSx(status.color)]} />
             <Chip size="small" label={areaLabel(site.area)} variant="outlined" sx={{ height: 22 }} />
           </Stack>
           {site.nameServers.length > 0 && (
@@ -538,7 +553,7 @@ function SiteRow(props: SiteActions) {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={5} sx={{ p: 0, borderBottom: expanded ? undefined : 'none' }}>
+        <TableCell colSpan={5} sx={{ p: 0, overflow: 'visible', borderBottom: expanded ? undefined : 'none' }}>
           <Collapse in={expanded} timeout="auto" unmountOnExit>
             <EdgeOneDomains site={site} isMobile={false} showNotice={showNotice} />
           </Collapse>
@@ -605,15 +620,13 @@ function DomainFormDialog({ open, mode, site, target, draft, onDraftChange, onCl
   draft: DomainDraft; onDraftChange: (d: DomainDraft) => void; onClose: () => void;
   onSubmit: () => void; pending: boolean; error: string | null; created: CreateDomainResult | null;
 }) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isEdit = mode === 'edit';
   const set = (patch: Partial<DomainDraft>) => onDraftChange({ ...draft, ...patch });
   const useHttp = draft.originProtocol !== 'HTTPS';
   const useHttps = draft.originProtocol !== 'HTTP';
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{isEdit ? '编辑加速域名' : '添加加速域名'} · {isEdit ? target?.domainName : site.zoneName}</DialogTitle>
       <DialogContent><Stack spacing={2.5} sx={{ mt: 1 }}>
         <Alert severity="info" sx={{ borderRadius: 2 }}>
@@ -674,13 +687,132 @@ function DomainFormDialog({ open, mode, site, target, draft, onDraftChange, onCl
           {created.certificate && <Typography variant="body2">证书：{created.certificate.status === 'applying' ? '申请中' : created.certificate.status === 'enabled' ? '已开启' : (created.certificate.reason || '未开启，可在列表开关重试')}</Typography>}
         </Alert>}
       </Stack></DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3 }}>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
         <Button color="inherit" onClick={onClose}>{created ? '完成' : '取消'}</Button>
         {!created && <Button variant="contained" disabled={pending} onClick={onSubmit}>
           {pending ? '保存中...' : isEdit ? '保存' : '创建并同步'}
         </Button>}
       </DialogActions>
     </Dialog>
+  );
+}
+
+/** 固定操作列不影响 scrollWidth；这里用自绘滚动条，避免系统覆盖式滚动条不显示 */
+function TableOverflowBar({ targetRef, watchKey }: { targetRef: React.RefObject<HTMLDivElement | null>; watchKey: unknown }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startX: number; startScroll: number } | null>(null);
+  const [metrics, setMetrics] = useState({ visible: false, thumbWidth: 0, thumbLeft: 0 });
+
+  const update = useCallback(() => {
+    const target = targetRef.current;
+    const track = trackRef.current;
+    if (!target) return;
+
+    const maxScroll = target.scrollWidth - target.clientWidth;
+    if (maxScroll <= 1 || !track) {
+      setMetrics({ visible: false, thumbWidth: 0, thumbLeft: 0 });
+      return;
+    }
+
+    const trackWidth = track.clientWidth;
+    const thumbWidth = Math.max(36, Math.round(trackWidth * (target.clientWidth / target.scrollWidth)));
+    const maxThumbLeft = Math.max(0, trackWidth - thumbWidth);
+    const thumbLeft = Math.round((target.scrollLeft / maxScroll) * maxThumbLeft);
+    setMetrics({ visible: true, thumbWidth, thumbLeft });
+  }, [targetRef]);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target) return;
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(target);
+    if (target.firstElementChild) observer.observe(target.firstElementChild);
+    target.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+
+    return () => {
+      observer.disconnect();
+      target.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [targetRef, update, watchKey]);
+
+  const onThumbPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = targetRef.current;
+    if (!target) return;
+    event.preventDefault();
+    dragRef.current = { startX: event.clientX, startScroll: target.scrollLeft };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onThumbPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const target = targetRef.current;
+    const track = trackRef.current;
+    if (!drag || !target || !track) return;
+
+    const maxScroll = target.scrollWidth - target.clientWidth;
+    const maxThumbLeft = track.clientWidth - metrics.thumbWidth;
+    if (maxScroll <= 0 || maxThumbLeft <= 0) return;
+
+    target.scrollLeft = drag.startScroll + ((event.clientX - drag.startX) / maxThumbLeft) * maxScroll;
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
+  };
+
+  const onTrackClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    const target = targetRef.current;
+    const track = trackRef.current;
+    if (!target || !track) return;
+
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    target.scrollLeft = ratio * (target.scrollWidth - target.clientWidth);
+  };
+
+  return (
+    <Box
+      ref={trackRef}
+      data-overflow-bar="true"
+      onClick={onTrackClick}
+      sx={{
+        display: metrics.visible ? 'block' : 'none',
+        position: 'relative',
+        height: 10,
+        mb: 1,
+        mx: 0.5,
+        borderRadius: '5px',
+        bgcolor: 'action.hover',
+        cursor: 'pointer',
+      }}
+    >
+      <Box
+        onPointerDown={onThumbPointerDown}
+        onPointerMove={onThumbPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          height: '100%',
+          width: metrics.thumbWidth,
+          left: metrics.thumbLeft,
+          borderRadius: '5px',
+          bgcolor: 'text.disabled',
+          cursor: 'grab',
+          touchAction: 'none',
+          transition: 'background-color .15s',
+          '&:hover': { bgcolor: 'text.secondary' },
+          '&:active': { cursor: 'grabbing' },
+        }}
+      />
+    </Box>
   );
 }
 
@@ -693,6 +825,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
   const [formError, setFormError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateDomainResult | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EdgeOneDomain | null>(null);
+  const [deleteDomainConfirm, setDeleteDomainConfirm] = useState('');
   const [applyingDomains, setApplyingDomains] = useState<Set<string>>(new Set());
 
   const domainsQuery = useQuery({
@@ -753,7 +886,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
 
   const deleteMutation = useMutation({
     mutationFn: (d: EdgeOneDomain) => deleteEdgeOneDomain({ credentialId: site.credentialId, zoneId: site.zoneId, domainName: d.domainName }),
-    onSuccess: () => { setDeleteTarget(null); showNotice('success', '加速域名已删除，DNSPod CNAME 已移除'); invalidate(); },
+    onSuccess: () => { setDeleteTarget(null); setDeleteDomainConfirm(''); showNotice('success', '加速域名已删除，DNSPod CNAME 已移除'); invalidate(); },
     onError: (err) => showNotice('error', errorText(err)),
   });
 
@@ -841,7 +974,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
       )}
       <Tooltip title={canDelete(d) ? '删除记录' : '请先停用后再删除'}>
         <span>
-          <IconButton size="small" color="error" disabled={!canDelete(d)} onClick={() => setDeleteTarget(d)}>
+          <IconButton size="small" color="error" disabled={!canDelete(d)} onClick={() => { setDeleteTarget(d); setDeleteDomainConfirm(''); }}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </span>
@@ -858,7 +991,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
   );
 
   return (
-    <Box sx={{ py: { xs: 1, sm: 2 }, px: { xs: 2, sm: 3 }, bgcolor: 'background.default', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+    <Box sx={{ py: { xs: 1, sm: 2 }, px: { xs: 2, sm: 3 }, bgcolor: 'background.default', width: '100%', maxWidth: '100%', minWidth: 0 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }}
         spacing={{ xs: 2, sm: 0 }} sx={{ borderBottom: { xs: 'none', sm: '1px solid rgba(0, 0, 0, 0.12)' }, mb: 2 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
@@ -866,24 +999,24 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
           <Chip size="small" label={`${domains.length} 个`} variant="outlined" />
         </Stack>
         <Stack direction="row" spacing={1} sx={{ mb: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ flex: { xs: 1, sm: 'none' } }}>添加域名</Button>
           <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={() => { void domainsQuery.refetch(); }}
             disabled={domainsQuery.isFetching} sx={{ flex: { xs: 1, sm: 'none' } }}>
             {domainsQuery.isFetching ? '刷新中...' : '刷新'}
           </Button>
-          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ flex: { xs: 1, sm: 'none' } }}>添加域名</Button>
         </Stack>
       </Stack>
 
       {linkAlert}
       {domainsQuery.isError && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>无法加载加速域名：{errorText(domainsQuery.error)}</Alert>}
 
-      {domainsQuery.isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+      {domainsQuery.isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={28} /></Box>
         : isMobile ? (domains.length === 0
-          ? <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}><Typography variant="body1">暂无加速域名</Typography></Box>
+          ? <Box sx={{ py: 8, textAlign: 'center', color: 'text.secondary' }}><EdgeOneIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} /><Typography variant="body1">暂无加速域名</Typography></Box>
           : <Stack spacing={1.5}>{domains.map((d) => {
           const tag = dnspodTag(d);
           const st = domainStatusChip(d.domainStatus);
-          return <Card key={d.domainName} variant="outlined" sx={{ borderRadius: 2 }}><CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          return <Card key={d.domainName} sx={{ borderRadius: 2 }}><CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
               <Typography variant="body2" fontWeight={600} sx={{ wordBreak: 'break-all', minWidth: 0 }}>
                 {d.domainName}
@@ -892,7 +1025,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
             </Stack>
 
             <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-              <Chip size="small" label={st.label} color={st.color} variant="outlined" sx={mobileTagSx} />
+              <Chip size="small" label={st.label} sx={[mobileTagSx, statusChipSx(st.color)]} />
               {certTag(d)}
               {tag && (
                 <Tooltip title={tag.title}>
@@ -915,14 +1048,29 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
             </Typography>
           </CardContent></Card>;
         })}</Stack>)
-        : <TableContainer ref={domainsTable.containerRef} sx={{ width: '100%', overflowX: 'auto', maxWidth: '100%' }}>
+        : <>
+          <TableContainer
+            ref={domainsTable.containerRef}
+            sx={{
+              display: 'block',
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              pb: 0.5,
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
           <Table size="small" sx={{ minWidth: 920, '& .MuiTableCell-root': { whiteSpace: 'nowrap' } }}>
             <TableHead><TableRow>
               <TableCell sx={{ minWidth: 190 }}>DNS 值</TableCell>
               <TableCell sx={{ minWidth: 90 }}>状态</TableCell>
               <TableCell sx={{ minWidth: 190, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>CNAME</TableCell>
               <TableCell sx={{ minWidth: 180, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>回源</TableCell>
-              <TableCell align="right" sx={{ minWidth: 150, ...domainsTable.headerCellSx }}>操作</TableCell>
+              <TableCell align="right" sx={{ minWidth: 150, ...domainsTable.headerCellSx }} />
             </TableRow></TableHead>
             <TableBody>{domains.length === 0 ? (
               <TableRow>
@@ -941,7 +1089,7 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
                     {certTag(d)}
                   </Box>
                 </TableCell>
-                <TableCell><Chip size="small" label={st.label} color={st.color} variant="outlined" /></TableCell>
+                <TableCell><Chip size="small" label={st.label} sx={statusChipSx(st.color)} /></TableCell>
                 <TableCell sx={{ ...cellSx, fontFamily: 'monospace', fontSize: '0.75rem' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                     <Tooltip title={d.cname || '-'}><span>{d.cname || '-'}</span></Tooltip>
@@ -962,14 +1110,21 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
               </TableRow>;
             })}</TableBody>
           </Table>
-        </TableContainer>}
+          </TableContainer>
+          <TableOverflowBar targetRef={domainsTable.containerRef} watchKey={`${site.zoneId}-${domains.length}`} />
+        </>}
 
       <DomainFormDialog open={formOpen} mode={formMode} site={site} target={formTarget}
         draft={draft} onDraftChange={setDraft} onClose={() => setFormOpen(false)}
         onSubmit={() => { setFormError(null); formMutation.mutate(); }}
         pending={formMutation.isPending} error={formError} created={created} />
 
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteDomainConfirm(''); }}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>删除加速域名</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{ mt: 1 }}>
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
@@ -978,11 +1133,25 @@ function EdgeOneDomains({ site, isMobile, showNotice }: { site: EdgeOneSite; isM
           <Typography variant="caption" color="text.secondary">
             当前状态：{deleteTarget?.domainStatus || '未知'}。仅已停用或未生效的域名可以删除；若删除按钮为灰色，请先点停用。
           </Typography>
+          <Typography variant="body2">
+            请输入加速域名 <strong>{deleteTarget?.domainName}</strong> 以确认：
+          </Typography>
+          <TextField
+            size="small"
+            fullWidth
+            value={deleteDomainConfirm}
+            onChange={(event) => setDeleteDomainConfirm(event.target.value)}
+            placeholder={deleteTarget?.domainName}
+          />
         </Stack></DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button color="inherit" onClick={() => setDeleteTarget(null)}>取消</Button>
-          <Button color="error" variant="contained" disabled={deleteMutation.isPending}
-            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button color="inherit" onClick={() => { setDeleteTarget(null); setDeleteDomainConfirm(''); }}>取消</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={deleteMutation.isPending || deleteDomainConfirm !== deleteTarget?.domainName}
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+          >
             {deleteMutation.isPending ? '删除中...' : '删除并同步'}
           </Button>
         </DialogActions>

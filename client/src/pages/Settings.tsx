@@ -187,7 +187,7 @@ export default function Settings() {
   return (
     <Box>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={5} sx={{ order: { xs: 2, md: 1 }, minWidth: 0 }}>
+        <Grid item xs={12} md={5} sx={{ order: { xs: 1, md: 1 }, minWidth: 0 }}>
           <Stack spacing={3}>
             <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: 'none' }}>
               <CardHeader
@@ -376,14 +376,16 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            <ApiKeyManagement />
             <CertificateSettingsCard />
             <NotificationChannelsCard />
           </Stack>
         </Grid>
 
-        <Grid item xs={12} md={7} sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
-          <DnsCredentialManagement />
+        <Grid item xs={12} md={7} sx={{ order: { xs: 2, md: 2 }, minWidth: 0 }}>
+          <Stack spacing={3}>
+            <DnsCredentialManagement />
+            <ApiKeyManagement />
+          </Stack>
         </Grid>
       </Grid>
     </Box>

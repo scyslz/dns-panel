@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 import {
   Alert,
   Autocomplete,
@@ -13,7 +14,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   Divider,
   FormControlLabel,
@@ -64,11 +64,66 @@ function MetaItem({ icon, children }: { icon: React.ReactNode; children: React.R
   );
 }
 
+function KeyPreview({ item, plainKey }: { item: ApiKeyRecord; plainKey: string | null }) {
+  return (
+    <Box
+      sx={{
+        px: 1.5,
+        py: 1,
+        borderRadius: '8px',
+        bgcolor: 'action.hover',
+        border: '1px solid',
+        borderColor: 'divider',
+        minWidth: 0,
+      }}
+    >
+      {plainKey ? (
+        <Typography
+          variant="caption"
+          sx={{ display: 'block', fontFamily: 'monospace', letterSpacing: 0.2, wordBreak: 'break-all' }}
+        >
+          {plainKey}
+        </Typography>
+      ) : (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            minWidth: 0,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            fontFamily: 'monospace',
+            fontSize: '0.75rem',
+            lineHeight: 1.6,
+            letterSpacing: 0.2,
+          }}
+        >
+          <Box component="span" sx={{ flexShrink: 0 }}>
+            dns_live_{item.keyId}_
+          </Box>
+          <Box
+            component="span"
+            aria-hidden
+            sx={{ flexShrink: 0, mx: 0.25, color: 'text.disabled', letterSpacing: '0.12em' }}
+          >
+            ••••••••
+          </Box>
+          {item.keySuffix ? (
+            <Box component="span" sx={{ flexShrink: 0 }}>
+              {item.keySuffix}
+            </Box>
+          ) : null}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 function DomainTags({ domains }: { domains: string[] }) {
   const [expanded, setExpanded] = useState(false);
 
   if (domains.length === 0) {
-    return <Chip size="small" label="全部域名" sx={{ borderRadius: 0.5 }} />;
+    return <Chip size="small" label="全部域名" variant="outlined" sx={{ borderRadius: '6px' }} />;
   }
 
   const visible = expanded ? domains : domains.slice(0, 2);
@@ -82,7 +137,7 @@ function DomainTags({ domains }: { domains: string[] }) {
           size="small"
           label={domain}
           variant="outlined"
-          sx={{ maxWidth: 180, borderRadius: 0.5, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+          sx={{ maxWidth: 180, borderRadius: '6px', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
         />
       ))}
       {domains.length > 2 ? (
@@ -91,7 +146,7 @@ function DomainTags({ domains }: { domains: string[] }) {
           variant="outlined"
           color="primary"
           label={expanded ? '收起' : `+${hidden}`}
-          sx={{ borderRadius: 0.5 }}
+          sx={{ borderRadius: '6px' }}
           onClick={() => setExpanded((value) => !value)}
         />
       ) : null}
@@ -99,12 +154,20 @@ function DomainTags({ domains }: { domains: string[] }) {
   );
 }
 
+const softStatusChipSx = (color: 'success' | 'warning') => (theme: any) => ({
+  bgcolor: alpha(theme.palette[color].main, 0.1),
+  color: theme.palette[color].dark,
+  fontWeight: 600,
+  border: 'none',
+});
+
 export default function ApiKeyManagement() {
   const navigate = useNavigate();
 
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -119,17 +182,18 @@ export default function ApiKeyManagement() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const [revokeTarget, setRevokeTarget] = useState<ApiKeyRecord | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
   const [revoking, setRevoking] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    setError('');
+    setPageError('');
     try {
       const res = await getApiKeys();
       // 已吊销的 Key 不再展示
       setKeys((res.data?.keys || []).filter((item) => !item.revokedAt));
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err?.message || '加载失败');
+      setPageError(typeof err === 'string' ? err : err?.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -142,11 +206,12 @@ export default function ApiKeyManagement() {
   const loadDomainOptions = async () => {
     if (domainOptions.length > 0 || loadingDomains) return;
     setLoadingDomains(true);
+    setFormError('');
     try {
       const res = await getDomainOptions();
       setDomainOptions(res.data?.domains || []);
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err?.message || '加载域名失败');
+      setFormError(typeof err === 'string' ? err : err?.message || '加载域名失败');
     } finally {
       setLoadingDomains(false);
     }
@@ -157,23 +222,23 @@ export default function ApiKeyManagement() {
     setAllDomains(true);
     setSelectedDomains([]);
     setRateLimit('60');
-    setError('');
+    setFormError('');
     setCreateOpen(true);
   };
 
   const onCreate = async () => {
     if (!name.trim()) {
-      setError('请填写名称');
+      setFormError('请填写名称');
       return;
     }
     const rate = Number(rateLimit);
     if (!Number.isFinite(rate) || rate < 1) {
-      setError('每分钟上限必须是正整数');
+      setFormError('每分钟上限必须是正整数');
       return;
     }
 
     setCreating(true);
-    setError('');
+    setFormError('');
     try {
       const res = await createApiKey({
         name: name.trim(),
@@ -185,7 +250,7 @@ export default function ApiKeyManagement() {
       setCreateOpen(false);
       await load();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err?.message || '创建失败');
+      setFormError(typeof err === 'string' ? err : err?.message || '创建失败');
     } finally {
       setCreating(false);
     }
@@ -194,7 +259,7 @@ export default function ApiKeyManagement() {
   const onCopy = async (value: string, id: number) => {
     const ok = await copyTextToClipboard(value);
     if (!ok) {
-      setError('复制失败，请长按密钥手动选择');
+      setPageError('复制失败，请手动选择密钥文本');
       return;
     }
     setCopiedId(id);
@@ -202,16 +267,17 @@ export default function ApiKeyManagement() {
   };
 
   const onRevoke = async () => {
-    if (!revokeTarget) return;
+    if (!revokeTarget || deleteConfirm !== revokeTarget.name) return;
     setRevoking(true);
     try {
       await revokeApiKey(revokeTarget.id);
       setKeys((prev) => prev.filter((item) => item.id !== revokeTarget.id));
       setNotice(`已删除 ${revokeTarget.name}`);
       setRevokeTarget(null);
+      setDeleteConfirm('');
       await load();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err?.message || '吊销失败');
+      setPageError(typeof err === 'string' ? err : err?.message || '删除失败');
     } finally {
       setRevoking(false);
     }
@@ -221,33 +287,32 @@ export default function ApiKeyManagement() {
     <Card
       sx={{
         border: 'none',
-        borderRadius: 1,
-        boxShadow: '0 10px 40px rgba(15, 23, 42, 0.07)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
       }}
     >
       <CardHeader
         sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 2.5 }, pb: 1.5 }}
         avatar={<KeyIcon color="primary" />}
         title={
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h6" fontWeight={600}>
             API Key
           </Typography>
         }
         action={
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} disabled={loading}>
-            创建
+            创建 Key
           </Button>
         }
       />
       <Divider />
       <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
-        {error ? (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-            {error}
+        {pageError ? (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setPageError('')}>
+            {pageError}
           </Alert>
         ) : null}
         {notice ? (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>
+          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setNotice('')}>
             {notice}
           </Alert>
         ) : null}
@@ -257,8 +322,8 @@ export default function ApiKeyManagement() {
             <CircularProgress size={28} />
           </Box>
         ) : keys.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: { xs: 4, sm: 6 } }}>
-            <KeyIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1.5 }} />
+          <Box sx={{ textAlign: 'center', py: { xs: 5, sm: 8 } }}>
+            <KeyIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
             <Typography variant="subtitle1" fontWeight={600}>
               还没有 API Key
             </Typography>
@@ -280,7 +345,7 @@ export default function ApiKeyManagement() {
                   p: { xs: 2, sm: 2.5 },
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: 0.75,
+                  borderRadius: '12px',
                   transition: 'background-color .15s ease',
                   '&:hover': {
                     bgcolor: 'rgba(37, 99, 235, 0.04)',
@@ -296,68 +361,29 @@ export default function ApiKeyManagement() {
                       <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ maxWidth: '100%' }}>
                         {item.name}
                       </Typography>
-                      {plainKey ? <Chip size="small" color="success" variant="outlined" label="新" sx={{ borderRadius: 0.5 }} /> : null}
-                      {item.revokedAt ? <Chip size="small" label="已吊销" sx={{ borderRadius: 0.5 }} /> : null}
+                      {plainKey ? <Chip size="small" label="新" sx={softStatusChipSx('success')} /> : null}
+                      {item.revokedAt ? <Chip size="small" label="已吊销" sx={{ bgcolor: 'action.hover', color: 'text.secondary', fontWeight: 600 }} /> : null}
                       {!item.revokedAt && !item.active ? (
-                        <Chip size="small" color="warning" label="已过期" sx={{ borderRadius: 0.5 }} />
+                        <Chip size="small" label="已过期" sx={softStatusChipSx('warning')} />
                       ) : null}
+                      <Stack
+                        direction="row"
+                        spacing={2}
+                        alignItems="center"
+                        sx={{ ml: 'auto', display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }}
+                      >
+                        <Box sx={{ width: { sm: 240, md: 300 }, flexShrink: 0 }}>
+                          <KeyPreview item={item} plainKey={plainKey} />
+                        </Box>
+                        <MetaItem icon={<SpeedIcon sx={{ fontSize: 15 }} />}>{item.rateLimitPerMin}/min</MetaItem>
+                        <MetaItem icon={<TimeIcon sx={{ fontSize: 15 }} />}>
+                          {item.lastUsedAt ? `最近 ${shortTime(item.lastUsedAt)}` : '从未使用'}
+                        </MetaItem>
+                      </Stack>
                     </Stack>
 
-                    <Box
-                      sx={{
-                        mt: 1.25,
-                        px: 1.5,
-                        py: 1,
-                        borderRadius: 0.5,
-                        bgcolor: 'action.hover',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                      }}
-                    >
-                      {plainKey ? (
-                        <Typography
-                          variant="caption"
-                          sx={{ display: 'block', fontFamily: 'monospace', letterSpacing: 0.2, wordBreak: 'break-all' }}
-                        >
-                          {plainKey}
-                        </Typography>
-                      ) : (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            minWidth: 0,
-                            fontFamily: 'monospace',
-                            fontSize: '0.75rem',
-                            lineHeight: 1.6,
-                            letterSpacing: 0.2,
-                          }}
-                        >
-                          <Box component="span" sx={{ flexShrink: 0 }}>
-                            dns_live_{item.keyId}_
-                          </Box>
-                          <Box
-                            component="span"
-                            aria-hidden
-                            sx={{
-                              flex: 1,
-                              minWidth: 0,
-                              mx: 0.25,
-                              overflow: 'hidden',
-                              whiteSpace: 'nowrap',
-                              color: 'text.disabled',
-                              letterSpacing: '0.12em',
-                            }}
-                          >
-                            {'*'.repeat(200)}
-                          </Box>
-                          {item.keySuffix ? (
-                            <Box component="span" sx={{ flexShrink: 0 }}>
-                              {item.keySuffix}
-                            </Box>
-                          ) : null}
-                        </Box>
-                      )}
+                    <Box sx={{ mt: 1.25, display: { xs: 'block', sm: 'none' } }}>
+                      <KeyPreview item={item} plainKey={plainKey} />
                     </Box>
 
                     <Box sx={{ mt: 1.25 }}>
@@ -369,10 +395,12 @@ export default function ApiKeyManagement() {
                       spacing={{ xs: 1.5, sm: 2.5 }}
                       flexWrap="wrap"
                       useFlexGap
-                      sx={{ mt: 1.25, rowGap: 0.75 }}
+                      sx={{ mt: 1.25, rowGap: 0.75, display: { xs: 'flex', sm: 'none' } }}
                     >
                       <MetaItem icon={<SpeedIcon sx={{ fontSize: 15 }} />}>{item.rateLimitPerMin}/min</MetaItem>
-                      <MetaItem icon={<TimeIcon sx={{ fontSize: 15 }} />}>最近 {shortTime(item.lastUsedAt)}</MetaItem>
+                      <MetaItem icon={<TimeIcon sx={{ fontSize: 15 }} />}>
+                        {item.lastUsedAt ? `最近 ${shortTime(item.lastUsedAt)}` : '从未使用'}
+                      </MetaItem>
                     </Stack>
                   </Box>
 
@@ -394,7 +422,7 @@ export default function ApiKeyManagement() {
                           size="small"
                           color="error"
                           className="api-key-delete"
-                          onClick={() => setRevokeTarget(item)}
+                          onClick={() => { setRevokeTarget(item); setDeleteConfirm(''); }}
                           sx={{
                             opacity: 1,
                             transition: 'opacity .15s ease',
@@ -426,14 +454,14 @@ export default function ApiKeyManagement() {
       </CardContent>
 
       <Dialog open={createOpen} onClose={() => (creating ? null : setCreateOpen(false))} fullWidth maxWidth="sm">
-        <DialogTitle>创建 API Key</DialogTitle>
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1 }}>创建 API Key</DialogTitle>
         <DialogContent>
-          {error ? (
-            <Alert severity="error" sx={{ mt: 1 }}>
-              {error}
+          {formError ? (
+            <Alert severity="error" sx={{ mt: 1, borderRadius: 2 }}>
+              {formError}
             </Alert>
           ) : null}
-          <Stack spacing={2.5} sx={{ mt: 1.5 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               autoFocus
               fullWidth
@@ -444,7 +472,7 @@ export default function ApiKeyManagement() {
               disabled={creating}
             />
 
-            <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+            <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '12px' }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -489,8 +517,8 @@ export default function ApiKeyManagement() {
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setCreateOpen(false)} disabled={creating}>
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+          <Button color="inherit" onClick={() => setCreateOpen(false)} disabled={creating}>
             取消
           </Button>
           <Button
@@ -499,24 +527,41 @@ export default function ApiKeyManagement() {
             disabled={creating}
             startIcon={creating ? <CircularProgress size={16} /> : <KeyIcon />}
           >
-            创建
+            {creating ? '创建中...' : '创建 Key'}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={!!revokeTarget} onClose={() => (revoking ? null : setRevokeTarget(null))} maxWidth="xs" fullWidth>
-        <DialogTitle>删除 API Key</DialogTitle>
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1 }}>删除 API Key</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            删除后使用该 Key 的脚本立即失效，且无法恢复。确定删除「{revokeTarget?.name}」？
-          </DialogContentText>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              删除后使用该 Key 的脚本会立即失效，且无法恢复。
+            </Alert>
+            <Typography variant="body2">
+              请输入 Key 名称 <strong>{revokeTarget?.name}</strong> 以确认：
+            </Typography>
+            <TextField
+              size="small"
+              fullWidth
+              value={deleteConfirm}
+              onChange={(event) => setDeleteConfirm(event.target.value)}
+              placeholder={revokeTarget?.name}
+            />
+          </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setRevokeTarget(null)} disabled={revoking}>
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+          <Button color="inherit" onClick={() => { setRevokeTarget(null); setDeleteConfirm(''); }} disabled={revoking}>
             取消
           </Button>
-          <Button color="error" variant="contained" onClick={onRevoke} disabled={revoking}>
-            删除
+          <Button
+            color="error"
+            variant="contained"
+            onClick={onRevoke}
+            disabled={revoking || deleteConfirm !== revokeTarget?.name}
+          >
+            {revoking ? '删除中...' : '删除'}
           </Button>
         </DialogActions>
       </Dialog>

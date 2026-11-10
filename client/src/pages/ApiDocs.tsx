@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   Alert,
   Box,
@@ -131,7 +132,7 @@ export default function ApiDocs() {
   return (
     <Box>
       <Stack spacing={0.5} sx={{ mb: 2 }}>
-        <Typography variant="h5" fontWeight={700}>
+        <Typography variant="h5" fontWeight={600}>
           API 参考
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -145,7 +146,27 @@ export default function ApiDocs() {
           onChange={(_, value) => setTab(value)}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 1 }}
+          sx={{
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            px: 1,
+            pt: 1,
+            '& .MuiTabs-indicator': { display: 'none' },
+            '& .MuiTab-root': {
+              minHeight: 48,
+              mr: 1,
+              mb: 1,
+              borderRadius: '12px',
+              fontWeight: 600,
+              textTransform: 'none',
+              color: 'text.secondary',
+              '&.Mui-selected': {
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+                color: 'primary.main',
+                fontWeight: 700,
+              },
+            },
+          }}
         >
           <Tab label="快速开始" />
           <Tab label="DNS 记录" />

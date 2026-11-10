@@ -28,7 +28,7 @@
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
-| v1.8.0 | 2026-11-09 | ✨ 支持 NS EdgeOne（1 站点 = 1 域名），加速域名增删改自动同步 CNAME 到腾讯云 DNSPod |
+| v1.7.1 | 2026-11-09 | ✨ 支持 NS EdgeOne（1 站点 = 1 域名），加速域名增删改自动同步 CNAME 到腾讯云 DNSPod；🔑 新增 Open API（API Key 认证、DNS 记录 CRUD/批量/幂等、EdgeOne 接口） |
 | v1.7.0 | 2026-03-31 | 🔐 新增证书中心（ACME/订单/自动续期/部署矩阵/通知）+ 域名到期手动设置 |
 | v1.6.0 | 2026-03-24 | ✨ 新增 ESA 自动 DNS 配置、全提供商权威 DNS 识别、非权威域名显示开关 |
 | v1.5.0 | 2026-03-02 | 🆕 新增 Cloudflare Tunnels 管理：隧道创建/删除、详情面板、cloudflared 安装指引、三类路由管理（Public Hostnames / CIDR / 主机名路由） |
@@ -42,8 +42,13 @@
 <details>
 <summary><b>查看完整更新日志</b></summary>
 
-### v1.8.0 (2026-11-09)
+### v1.7.1 (2026-11-09)
 - ✨ 支持 NS EdgeOne：1 站点 = 1 域名，加速域名增删改自动同步 CNAME 到腾讯云 DNSPod
+- 🔑 **新增 Open API（`/api/open`）**
+  - API Key 认证（`Authorization: Bearer` / `X-API-Key`），支持域名、IP/CIDR、凭证与限流绑定
+  - DNS 记录查询、创建、更新、删除、启停、upsert、批量与幂等
+  - EdgeOne 站点 / 加速域名 / 证书 / CNAME 同步接口
+  - 统一响应信封与错误码，设置页 API Key 管理与 `/docs` 参考页
 
 ### v1.7.0 (2026-03-31)
 - 🔐 **新增通用证书中心（Certificate Center）**
@@ -208,8 +213,7 @@
 ## 📚 相关文档
 
 - [快速启动指南](doc/快速启动指南.md)：面向新用户的快速部署与使用说明
-- [开放 API 参考](doc/API.md)：`/api/open` 的认证、端点、错误码与示例
-- [开放 API 设计](doc/DNS_API_DESIGN.md)：开放 API 的设计与取舍
+- [Open API 参考](doc/OPEN_API.md)：`/api/open` 的认证、端点、错误码与示例
 - [EdgeOne 接入](doc/EDGEONE.md)：站点、加速域名与 DNSPod 自动同步
 - [证书中心规划](doc/CERTIFICATE_PLAN.md)：证书中心整体规划
 - [证书规划评估](doc/GEMINI_CERTIFICATE_PLAN_REVIEW.md)：Gemini 规划评估记录
@@ -223,7 +227,7 @@
 
 ## 🏷️ 发版（Tag 自动发布）
 
-项目已提供 GitHub Actions 工作流：当推送 `v*` Tag（例如 `v1.7.0`）时，会自动：
+项目已提供 GitHub Actions 工作流：当推送 `v*` Tag（例如 `v1.7.1`）时，会自动：
 
 - 构建并推送 Docker 镜像：`a3180623/dns-panel:<tag>`、`a3180623/dns-panel:<version>`、`a3180623/dns-panel:latest`
 - 创建 GitHub Release（自动生成 Release Notes）
@@ -233,12 +237,12 @@
 ```bash
 # 1) 先提交本次改动（包括 README 的版本更新）
 git add -A
-git commit -m "chore(release): v1.7.0"
+git commit -m "chore(release): v1.7.1"
 
 # 2) 打 Tag 并推送（触发 Release on Tag 工作流）
-git tag -a v1.7.0 -m "v1.7.0"
+git tag -a v1.7.1 -m "v1.7.1"
 git push origin main  # 仓库如使用 master 分支请改为 master
-git push origin v1.7.0
+git push origin v1.7.1
 ```
 
 发布前请在 GitHub 仓库 Secrets 中配置：
@@ -485,8 +489,7 @@ curl http://localhost:3000/health  # 测试健康检查
 ├── .env.example                      # 环境变量示例
 ├── doc/                              # 项目文档
 │   ├── 快速启动指南.md               # 快速部署指南
-│   ├── API.md                        # 开放 API 参考
-│   ├── DNS_API_DESIGN.md             # 开放 API 设计
+│   ├── OPEN_API.md                   # Open API 参考
 │   ├── EDGEONE.md                    # EdgeOne 接入说明
 │   ├── CERTIFICATE_PLAN.md           # 证书中心规划
 │   ├── GEMINI_CERTIFICATE_PLAN_REVIEW.md # 规划评估

@@ -209,8 +209,7 @@ export default function Logs() {
           onPageChange={handleChangePage}
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="每页行数:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} / 共 ${count} 条`}
+          labelRowsPerPage="每页显示"
         />
       </TableContainer>
     </Box>
