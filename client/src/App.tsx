@@ -11,6 +11,7 @@ import Tunnels from './pages/Tunnels';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Certificates from './pages/Certificates';
+import ApiDocs from './pages/ApiDocs';
 
 import { BreadcrumbProvider } from './contexts/BreadcrumbContext';
 
@@ -55,6 +56,7 @@ function App() {
         <Route path="logs" element={<Logs />} />
         <Route path="settings" element={<Settings />} />
         <Route path="certificates" element={<Certificates />} />
+        <Route path="docs" element={<ApiDocs />} />
       </Route>
 
       {/* 旧 EdgeOne 独立页面已并入 DNS 服务商列表 */}

@@ -22,6 +22,9 @@ import certificateRoutes from './routes/certificates';
 import certificateDeployRoutes from './routes/certificateDeploy';
 import vendorCertificateRoutes from './routes/vendorCertificates';
 import certificateAliasesRoutes from './routes/certificateAliases';
+// 开放 API（API Key 认证，独立于页面 JWT）
+import apiV1Routes from './open-api/routes/v1';
+import apiKeyAdminRoutes from './open-api/routes/admin';
 import { startCertificateOrderScheduler } from './jobs/certificateOrderScheduler';
 import { startCertificateRenewalScheduler } from './jobs/certificateRenewalScheduler';
 import { startVendorCertificateScheduler } from './jobs/vendorCertificateScheduler';
@@ -58,6 +61,8 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/certificate-deploy', certificateDeployRoutes);
 app.use('/api/vendor-certificates', vendorCertificateRoutes);
 app.use('/api/certificate-aliases', certificateAliasesRoutes);
+app.use('/api/open', apiV1Routes);                       // 开放 API v1
+app.use('/api/api-keys', apiKeyAdminRoutes);           // API Key 管理（JWT）
 
 // 静态文件服务 (生产环境)
 // 在 Docker 中，前端构建产物将被复制到 /app/public

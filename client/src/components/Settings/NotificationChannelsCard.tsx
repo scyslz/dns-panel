@@ -67,7 +67,7 @@ const CHANNEL_OPTIONS: Array<{ value: CertificateNotificationChannelKey; label: 
 const TWO_COLUMN_GRID_SX = {
   display: 'grid',
   gap: 2,
-  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
 } as const;
 
 function createDefaultSettings(): CertificateSettingsData {
@@ -147,7 +147,7 @@ function ChannelPanel({
         spacing={1.5}
         alignItems={{ xs: 'flex-start', sm: 'center' }}
       >
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="subtitle2" fontWeight={600}>
             {title}
           </Typography>
@@ -409,7 +409,7 @@ export default function NotificationChannelsCard() {
                   sx={{
                     display: 'grid',
                     gap: 2,
-                    gridTemplateColumns: { xs: '1fr', sm: '240px 1fr' },
+                    gridTemplateColumns: { xs: '1fr', sm: 'minmax(110px, 180px) minmax(0, 1fr)' },
                     alignItems: { sm: 'center' },
                   }}
                 >
@@ -703,10 +703,11 @@ export default function NotificationChannelsCard() {
               description={`当前已启用 ${enabledChannels.length} 个渠道；测试基于当前已保存配置。`}
             >
               <Stack
-                direction={{ xs: 'column', sm: 'row' }}
+                direction="row"
                 spacing={1.5}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                useFlexGap
               >
                 <TextField
                   select
@@ -714,7 +715,7 @@ export default function NotificationChannelsCard() {
                   label="测试渠道"
                   value={testChannel}
                   onChange={(event) => setTestChannel(event.target.value as CertificateNotificationChannelKey)}
-                  sx={{ minWidth: { xs: '100%', sm: 220 } }}
+                  sx={{ flex: '1 1 180px', minWidth: 0 }}
                 >
                   {CHANNEL_OPTIONS.map((item) => (
                     <MenuItem key={item.value} value={item.value}>
@@ -722,12 +723,19 @@ export default function NotificationChannelsCard() {
                     </MenuItem>
                   ))}
                 </TextField>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ flex: '1 1 auto', justifyContent: 'flex-end' }}
+                >
                   <Button
                     variant="outlined"
                     startIcon={testing ? <CircularProgress size={16} /> : <SendIcon />}
                     onClick={handleTest}
                     disabled={testing}
+                    sx={{ flex: { xs: '1 1 120px', sm: '0 0 auto' } }}
                   >
                     发送测试
                   </Button>
@@ -736,6 +744,7 @@ export default function NotificationChannelsCard() {
                     startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
                     onClick={handleSave}
                     disabled={saving}
+                    sx={{ flex: { xs: '1 1 150px', sm: '0 0 auto' } }}
                   >
                     保存通知设置
                   </Button>

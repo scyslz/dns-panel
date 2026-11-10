@@ -215,7 +215,11 @@ export class CloudflareProvider extends BaseProvider {
 
       // 只有 A/AAAA/CNAME 支持代理
       const supportsProxied = ['A', 'AAAA', 'CNAME'].includes(params.type.toUpperCase());
-      const proxied = supportsProxied ? params.proxied : undefined;
+      const optionProxied = params.options?.proxied;
+      const proxied = supportsProxied
+        ? (typeof optionProxied === 'boolean' ? optionProxied : params.proxied)
+        : undefined;
+      const comment = typeof params.options?.comment === 'string' ? params.options.comment : params.remark;
       const normalizedValue = this.normalizeTxtValueForWrite(params.type, params.value);
 
       const created = await this.withRetry(() =>
@@ -226,6 +230,7 @@ export class CloudflareProvider extends BaseProvider {
           ttl: params.ttl,
           proxied,
           priority: params.priority,
+          comment,
         })
       );
 
@@ -239,6 +244,7 @@ export class CloudflareProvider extends BaseProvider {
         ttl: created.ttl,
         priority: created.priority,
         proxied: !!created.proxied,
+        remark: (created as any).comment,
         meta: { raw: created },
       });
     } catch (err) {
@@ -254,7 +260,11 @@ export class CloudflareProvider extends BaseProvider {
       const zone = await this.getZone(zoneId);
 
       const supportsProxied = ['A', 'AAAA', 'CNAME'].includes(params.type.toUpperCase());
-      const proxied = supportsProxied ? params.proxied : undefined;
+      const optionProxied = params.options?.proxied;
+      const proxied = supportsProxied
+        ? (typeof optionProxied === 'boolean' ? optionProxied : params.proxied)
+        : undefined;
+      const comment = typeof params.options?.comment === 'string' ? params.options.comment : params.remark;
       const normalizedValue = this.normalizeTxtValueForWrite(params.type, params.value);
 
       const updated = await this.withRetry(() =>
@@ -265,6 +275,7 @@ export class CloudflareProvider extends BaseProvider {
           ttl: params.ttl,
           proxied,
           priority: params.priority,
+          comment,
         })
       );
 
@@ -278,6 +289,7 @@ export class CloudflareProvider extends BaseProvider {
         ttl: updated.ttl,
         priority: updated.priority,
         proxied: !!updated.proxied,
+        remark: (updated as any).comment,
         meta: { raw: updated },
       });
     } catch (err) {

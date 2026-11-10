@@ -759,6 +759,7 @@ export class DnspodProvider extends BaseProvider {
 
       if (params.remark !== undefined) {
         await this.request<CommonOkResponse>('ModifyRecordRemark', {
+          Domain: zone.name,
           DomainId: domainId,
           RecordId: newId,
           Remark: params.remark || '',
@@ -831,6 +832,7 @@ export class DnspodProvider extends BaseProvider {
 
       if (params.remark !== undefined) {
         await this.request<CommonOkResponse>('ModifyRecordRemark', {
+          Domain: zone.name,
           DomainId: domainId,
           RecordId: rid,
           Remark: params.remark || '',

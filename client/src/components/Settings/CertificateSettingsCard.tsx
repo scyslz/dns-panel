@@ -23,13 +23,13 @@ import { CertificateSettingsData } from '@/types/cert';
 const TWO_COLUMN_GRID_SX = {
   display: 'grid',
   gap: 2,
-  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
 } as const;
 
 const THREE_COLUMN_GRID_SX = {
   display: 'grid',
   gap: 2,
-  gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
 } as const;
 
 function createDefaultSettings(): CertificateSettingsData {

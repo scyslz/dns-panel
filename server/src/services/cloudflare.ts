@@ -474,6 +474,7 @@ export class CloudflareService {
       ttl?: number;
       proxied?: boolean;
       priority?: number;
+      comment?: string;
     }
   ): Promise<DNSRecord> {
     try {
@@ -485,6 +486,7 @@ export class CloudflareService {
         ttl: params.ttl || 1,
         proxied: params.proxied,
         priority: params.priority,
+        comment: params.comment,
       } as any);
 
       // 清除缓存
@@ -519,6 +521,7 @@ export class CloudflareService {
       ttl?: number;
       proxied?: boolean;
       priority?: number;
+      comment?: string;
     }
   ): Promise<DNSRecord> {
     try {

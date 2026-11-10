@@ -25,6 +25,7 @@ const breadcrumbNameMap: Record<string, string> = {
   certificates: '证书中心',
   logs: '操作日志',
   settings: '设置',
+  docs: 'API 文档',
   tunnels: 'Tunnels',
 };
 

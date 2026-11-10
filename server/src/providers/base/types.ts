@@ -175,6 +175,11 @@ export interface CreateRecordParams {
   priority?: number;               // 优先级（MX/SRV）
   remark?: string;                 // 备注
   proxied?: boolean;               // 代理状态（Cloudflare）
+  /**
+   * 厂商扩展字段：原样透传给 Provider，未识别的键由 Provider 忽略。
+   * 例：Cloudflare 的 comment / tags，其他厂商的未来参数。
+   */
+  options?: Record<string, unknown>;
 }
 
 /**

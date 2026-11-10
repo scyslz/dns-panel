@@ -34,7 +34,8 @@ import {
   Dashboard as DashboardIcon,
   History as HistoryIcon,
   WorkspacePremium as CertificateIcon,
-  Security as EdgeOneIcon
+  Security as EdgeOneIcon,
+  MenuBook as DocsIcon
 } from '@mui/icons-material';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProvider } from '@/contexts/ProviderContext';
@@ -919,6 +920,20 @@ export default function Sidebar({ onClose }: SidebarProps) {
                       
                                               
                       
+                  <Tooltip title="API 文档" placement="left">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => { e.stopPropagation(); navigate('/docs'); }}
+                      sx={{
+                        color: 'rgba(255,255,255,0.5)',
+                        p: 0.2,
+                        WebkitTapHighlightColor: 'transparent',
+                        '&:hover': { color: 'white' }
+                      }}
+                    >
+                      <DocsIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="系统设置" placement="left">
                       
                                               

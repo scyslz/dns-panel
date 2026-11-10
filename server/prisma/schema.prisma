@@ -45,6 +45,7 @@ model User {
   cfCredentials                   CfCredential[] @relation("CfCredentials")
   domainExpiryNotifications       DomainExpiryNotification[]
   domainExpiryOverrides           DomainExpiryOverride[]
+  apiKeys                         ApiKey[]
 
   @@map("users")
 }
@@ -335,4 +336,27 @@ model DomainExpiryOverride {
   @@unique([userId, domain])
   @@index([userId])
   @@map("domain_expiry_overrides")
+}
+
+/// 开放 API 密钥（仅追加表，不影响现有业务表）
+model ApiKey {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  keyId           String    @unique
+  keyHash         String
+  keySuffix       String?   // secret 末 4 位，仅用于掩码展示
+  credentialId    Int?
+  allowedDomains  String?
+  allowedIps      String?
+  rateLimitPerMin Int       @default(60)
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  lastUsedIp      String?
+  createdAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@map("api_keys")
 }

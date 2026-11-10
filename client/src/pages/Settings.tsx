@@ -34,6 +34,7 @@ import {
   updateDomainExpirySettings,
   updatePassword,
 } from '@/services/auth';
+import ApiKeyManagement from '@/components/Settings/ApiKeyManagement';
 import CertificateSettingsCard from '@/components/Settings/CertificateSettingsCard';
 import DnsCredentialManagement from '@/components/Settings/DnsCredentialManagement';
 import NotificationChannelsCard from '@/components/Settings/NotificationChannelsCard';
@@ -186,7 +187,7 @@ export default function Settings() {
   return (
     <Box>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={5} sx={{ order: { xs: 2, md: 1 } }}>
+        <Grid item xs={12} md={5} sx={{ order: { xs: 2, md: 1 }, minWidth: 0 }}>
           <Stack spacing={3}>
             <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: 'none' }}>
               <CardHeader
@@ -375,12 +376,13 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            <ApiKeyManagement />
             <CertificateSettingsCard />
             <NotificationChannelsCard />
           </Stack>
         </Grid>
 
-        <Grid item xs={12} md={7} sx={{ order: { xs: 1, md: 2 } }}>
+        <Grid item xs={12} md={7} sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
           <DnsCredentialManagement />
         </Grid>
       </Grid>

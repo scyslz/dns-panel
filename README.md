@@ -207,9 +207,13 @@
 
 ## 📚 相关文档
 
-- `快速启动指南.md`：面向新用户的快速部署与使用说明
-- `CERTIFICATE_PLAN.md`：证书中心整体规划
-- `GEMINI_CERTIFICATE_PLAN_REVIEW.md`：证书规划评估记录（Gemini）
+- [快速启动指南](doc/快速启动指南.md)：面向新用户的快速部署与使用说明
+- [开放 API 参考](doc/API.md)：`/api/open` 的认证、端点、错误码与示例
+- [开放 API 设计](doc/DNS_API_DESIGN.md)：开放 API 的设计与取舍
+- [EdgeOne 接入](doc/EDGEONE.md)：站点、加速域名与 DNSPod 自动同步
+- [证书中心规划](doc/CERTIFICATE_PLAN.md)：证书中心整体规划
+- [证书规划评估](doc/GEMINI_CERTIFICATE_PLAN_REVIEW.md)：Gemini 规划评估记录
+- [UI/UX 标准](doc/UIUX-STANDARDS.md)：界面与交互规范
 
 ---
 
@@ -479,9 +483,14 @@ curl http://localhost:3000/health  # 测试健康检查
 ├── docker-compose.yml                # Docker Compose 配置
 ├── Dockerfile                        # 多阶段构建（前后端一体）
 ├── .env.example                      # 环境变量示例
-├── 快速启动指南.md                   # 快速部署指南
-├── CERTIFICATE_PLAN.md               # 证书中心规划
-└── GEMINI_CERTIFICATE_PLAN_REVIEW.md # Gemini 规划评估
+├── doc/                              # 项目文档
+│   ├── 快速启动指南.md               # 快速部署指南
+│   ├── API.md                        # 开放 API 参考
+│   ├── DNS_API_DESIGN.md             # 开放 API 设计
+│   ├── EDGEONE.md                    # EdgeOne 接入说明
+│   ├── CERTIFICATE_PLAN.md           # 证书中心规划
+│   ├── GEMINI_CERTIFICATE_PLAN_REVIEW.md # 规划评估
+│   └── UIUX-STANDARDS.md             # UI/UX 规范
 ```
 
 ---
