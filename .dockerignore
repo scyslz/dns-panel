@@ -1,0 +1,22 @@
+.git
+.github
+.gitignore
+.vscode
+.idea
+
+# 依赖与构建产物（镜像内重新安装/构建）
+client/node_modules
+server/node_modules
+client/dist
+server/dist
+
+# 本地数据与日志
+data
+*.db
+*.db-journal
+*.log
+
+# 文档与开发辅助
+doc
+README.md
+LICENSE

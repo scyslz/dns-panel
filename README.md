@@ -1,7 +1,7 @@
 # 🌐 DNS Panel
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/r/a3180623/dns-panel)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/r/scyslz/dns-panel)
 
 > 现代化的多 DNS 服务商统一管理面板：多用户、多凭证隔离，统一管理域名与 DNS 解析记录，支持通用证书中心、Cloudflare Tunnels 管理，并提供操作日志审计。
 
@@ -14,7 +14,6 @@
 - [支持的服务商](#-支持的服务商)
 - [技术栈](#-技术栈)
 - [相关文档](#-相关文档)
-- [快速部署](#-快速部署docker-compose)
 - [Docker Hub 镜像](#-docker-hub-镜像部署)
 - [首次使用](#-首次使用)
 - [本地开发](#-本地开发)
@@ -221,16 +220,17 @@
 
 ---
 
-## 🚀 快速部署（Docker Compose）
-
-> 推荐方式：前后端一体，只需暴露一个端口。
-
 ## 🏷️ 发版（Tag 自动发布）
 
-项目已提供 GitHub Actions 工作流：当推送 `v*` Tag（例如 `v1.7.1`）时，会自动：
+项目只保留一个发布工作流 `release-on-tag.yml`。推送 `v*` Tag（例如 `v1.7.1`）或手动触发并填写 Tag 后，会自动：
 
-- 构建并推送 Docker 镜像：`a3180623/dns-panel:<tag>`、`a3180623/dns-panel:<version>`、`a3180623/dns-panel:latest`
-- 创建 GitHub Release（自动生成 Release Notes）
+- 构建并推送多架构 Docker 镜像到 Docker Hub：
+  - `scyslz/dns-panel:v1.7.1`
+  - `scyslz/dns-panel:1.7`
+  - `scyslz/dns-panel:latest`（预发布 Tag 不带 `latest`）
+- 构建发布包：`dns-panel-<version>-bundle.tar.gz`（服务端 dist + 前端静态资源 + prisma）
+- 构建离线镜像：`dns-panel-<version>-linux-amd64.tar.gz`、`dns-panel-<version>-linux-arm64.tar.gz`
+- 生成 `SHA256SUMS`，创建 GitHub Release 并自动生成 Release Notes
 
 使用方法：
 
@@ -342,7 +342,7 @@ docker run -d \
   -e DATABASE_URL=file:/app/data/database.db \
   -v $(pwd)/data:/app/data \
   --restart unless-stopped \
-  a3180623/dns-panel:latest
+  scyslz/dns-panel:latest
 ```
 
 > 镜像由 GitHub Actions 自动构建，包含 `latest` 与 `sha` 标签。
