@@ -225,12 +225,13 @@
 项目只保留一个发布工作流 `release-on-tag.yml`。推送 `v*` Tag（例如 `v1.7.1`）或手动触发并填写 Tag 后，会自动：
 
 - 构建并推送多架构 Docker 镜像到 Docker Hub：
-  - `scyslz/dns-panel:v1.7.1`
+  - `scyslz/dns-panel:1.7.1`
   - `scyslz/dns-panel:1.7`
   - `scyslz/dns-panel:latest`（预发布 Tag 不带 `latest`）
-- 构建发布包：`dns-panel-<version>-bundle.tar.gz`（服务端 dist + 前端静态资源 + prisma）
-- 构建离线镜像：`dns-panel-<version>-linux-amd64.tar.gz`、`dns-panel-<version>-linux-arm64.tar.gz`
+- 构建轻量发布包：`dns-panel-<version>-bundle.tar.gz`（服务端 dist + 前端静态资源 + prisma，约 1 MB）
 - 生成 `SHA256SUMS`，创建 GitHub Release 并自动生成 Release Notes
+
+> 离线 Docker 镜像包不再产出，直接 `docker pull scyslz/dns-panel:<version>` 即可；有离线需求时可在本地 `docker save`。
 
 使用方法：
 
@@ -345,7 +346,7 @@ docker run -d \
   scyslz/dns-panel:latest
 ```
 
-> 镜像由 GitHub Actions 自动构建，包含 `latest` 与 `sha` 标签。
+> 镜像由 GitHub Actions 自动构建（amd64 + arm64），包含 `latest`、主版本与具体版本标签。
 
 ---
 

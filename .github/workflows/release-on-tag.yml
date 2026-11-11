@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -146,61 +146,11 @@ jobs:
           path: release-assets/*
           if-no-files-found: error
 
-  # 每个架构的离线 Docker 镜像包
-  docker-archives:
-    name: Docker archive (${{ matrix.arch }})
-    needs: quality
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
-
-      - name: Resolve version
-        id: version
-        run: |
-          v="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          echo "value=$v" >> "$GITHUB_OUTPUT"
-          echo "version=${v#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image archive
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          ARCH="${{ matrix.arch }}"
-          mkdir -p release-assets
-          docker buildx build \
-            --platform "linux/${ARCH}" \
-            --file ./Dockerfile \
-            --output type=docker,dest="dns-panel-${ARCH}.tar" \
-            --cache-from type=gha,scope=docker-arch-${ARCH} \
-            --cache-to type=gha,mode=max,scope=docker-arch-${ARCH} \
-            .
-          gzip -9 -c "dns-panel-${ARCH}.tar" > "release-assets/dns-panel-${VERSION}-linux-${ARCH}.tar.gz"
-          rm -f "dns-panel-${ARCH}.tar"
-
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-${{ matrix.arch }}
-          path: release-assets/*
-          if-no-files-found: error
-
-  # GitHub Release：汇总所有产物 + 自动生成 Release Notes
+  # GitHub Release：bundle + 校验和 + 自动生成 Release Notes
+  # 离线 Docker 镜像包不再产出：多架构镜像已发布到 Docker Hub，直接 pull 即可
   github-release:
     name: Create GitHub Release
-    needs: [docker, bundle, docker-archives]
+    needs: [docker, bundle]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -218,8 +168,7 @@ jobs:
         with:
           path: release-assets
           # 只取发布产物，排除 Buildx 的 *.dockerbuild GHA 缓存包
-          pattern: '{release-bundle,docker-*}'
-          merge-multiple: true
+          name: release-bundle
 
       - name: Generate checksums
         working-directory: release-assets
