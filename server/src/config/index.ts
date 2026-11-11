@@ -29,6 +29,18 @@ export const config = {
   // 数据库配置
   databaseUrl: process.env.DATABASE_URL || 'file:./database.db',
 
+  // 系统设置的「首次启动默认值」。设置页保存后以数据库为准，环境变量不再实时生效。
+  // 未设置时：公开注册关闭、注册审核开启、多用户开启。
+  defaults: {
+    publicRegistration: String(process.env.ALLOW_PUBLIC_REGISTRATION || '').trim().toLowerCase() === 'true',
+    multiUser: String(process.env.MULTI_USER_ENABLED || '').trim().toLowerCase() !== 'false',
+  },
+
+  // 旧库升级：无管理员时提升哪个已有账号为管理员（默认取最早创建的账号）
+  bootstrap: {
+    adminUsername: String(process.env.BOOTSTRAP_ADMIN_USERNAME || '').trim(),
+  },
+
   // JWT 配置
   jwt: {
     secret: (process.env.JWT_SECRET || 'default-secret-key') as string,

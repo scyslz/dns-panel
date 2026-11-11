@@ -21,6 +21,11 @@ services:
       - PORT=3000
       - JWT_EXPIRES_IN=7d
       - LOG_RETENTION_DAYS=90
+      # 账号策略初始值（仅首次创建设置记录时生效；之后在「设置 → 账号与注册」里改，立即生效）
+      - ALLOW_PUBLIC_REGISTRATION=${ALLOW_PUBLIC_REGISTRATION:-false}
+      - MULTI_USER_ENABLED=${MULTI_USER_ENABLED:-true}
+      # 旧库升级时可指定提升为管理员的账号（留空则取最早账号）
+      - BOOTSTRAP_ADMIN_USERNAME=${BOOTSTRAP_ADMIN_USERNAME:-}
     volumes:
       # 持久化数据库文件
       - ./data:/app/data

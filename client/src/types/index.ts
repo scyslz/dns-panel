@@ -1,3 +1,5 @@
+export type UserRole = 'admin' | 'user';
+
 /**
  * 用户类型
  */
@@ -5,7 +7,8 @@ export interface User {
   id: number;
   username: string;
   email?: string | null;
-  cfAccountId?: string;
+  role?: UserRole;
+  isActive?: boolean;  cfAccountId?: string;
   domainExpiryDisplayMode?: 'date' | 'days';
   domainExpiryThresholdDays?: number;
   showNonAuthoritativeDomains?: boolean;

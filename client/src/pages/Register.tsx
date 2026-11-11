@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -20,6 +20,7 @@ import {
   PersonAdd as PersonAddIcon 
 } from '@mui/icons-material';
 import { register as registerUser } from '@/services/auth';
+import { getRegistrationStatus } from '@/services/users';
 import { isValidEmail, isStrongPassword } from '@/utils/validators';
 
 interface RegisterForm {
@@ -39,6 +40,20 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [closed, setClosed] = useState(false);
+  const [requiresApproval, setRequiresApproval] = useState(false);
+  const [registered, setRegistered] = useState(false);
+
+  useEffect(() => {
+    getRegistrationStatus()
+      .then((res) => {
+        setClosed(res?.data?.enabled !== true);
+        setRequiresApproval(res?.data?.requiresApproval === true);
+      })
+      .catch(() => setClosed(true))
+      .finally(() => setChecking(false));
+  }, []);
 
   const {
     register,
@@ -54,12 +69,16 @@ export default function Register() {
       setLoading(true);
       setError('');
 
-      await registerUser({
+      const res = await registerUser({
         username: data.username,
         email: data.email,
         password: data.password,
       });
 
+      if (res?.data?.requiresApproval) {
+        setRegistered(true);
+        return;
+      }
       alert('注册成功！请登录');
       navigate('/login');
     } catch (err: any) {
@@ -147,12 +166,33 @@ export default function Register() {
 
           <Box sx={{ mb: 4 }}>
             <Typography variant="h4" fontWeight="bold" gutterBottom color="text.primary">
-              创建新账户
+              创建账号
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              请填写以下信息以完成注册
+              空库首个账号自动成为管理员；其余账号默认为普通用户
             </Typography>
           </Box>
+
+          {closed && (
+            <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+              公开注册已关闭，请联系管理员在「用户管理」中创建账号。
+            </Alert>
+          )}
+
+          {!closed && requiresApproval && !registered && (
+            <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+              本系统开启了注册审核：提交后需管理员在「用户管理」中通过审核，通过后才能登录。
+            </Alert>
+          )}
+
+          {registered && (
+            <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+              注册成功！账号待管理员审核，通过后方可登录。
+              <Box sx={{ mt: 2 }}>
+                <Button variant="outlined" size="small" onClick={() => navigate('/login')}>返回登录</Button>
+              </Box>
+            </Alert>
+          )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
@@ -160,7 +200,7 @@ export default function Register() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)} hidden={registered}>
             <Stack spacing={2}>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                 <TextField
@@ -240,7 +280,7 @@ export default function Register() {
                 type="submit"
                 variant="contained"
                 size="large"
-                disabled={loading}
+                disabled={loading || checking || closed || registered}
                 startIcon={!loading && <PersonAddIcon />}
                 sx={{ 
                   mt: 2, 
@@ -249,7 +289,7 @@ export default function Register() {
                   fontWeight: 600
                 }}
               >
-                {loading ? '注册中...' : '创建账户'}
+                {loading ? '注册中...' : '创建账号'}
               </Button>
             </Stack>
 

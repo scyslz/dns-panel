@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
 import { encrypt, decrypt } from '../utils/encryption';
+import { signUserToken } from '../utils/jwt';
+import { isUserRole, UserRole } from './roles';
 
 const prisma = new PrismaClient();
 
@@ -153,9 +155,18 @@ export class TwoFactorService {
   /**
    * 生成临时 Token（用于 2FA 验证流程）
    */
-  static generateTempToken(userId: number, username: string): string {
+  static generateTempToken(user: {
+    id: number;
+    username: string;
+    tokenVersion: number;
+  }): string {
     return jwt.sign(
-      { id: userId, username, type: '2fa_pending' },
+      {
+        id: user.id,
+        username: user.username,
+        tv: user.tokenVersion,
+        type: '2fa_pending',
+      },
       config.jwt.secret,
       { expiresIn: TEMP_TOKEN_EXPIRES }
     );
@@ -164,11 +175,12 @@ export class TwoFactorService {
   /**
    * 验证临时 Token
    */
-  static verifyTempToken(tempToken: string): { id: number; username: string } | null {
+  static verifyTempToken(tempToken: string): { id: number; username: string; tv: number } | null {
     try {
       const decoded = jwt.verify(tempToken, config.jwt.secret) as {
         id: number;
         username: string;
+        tv?: number;
         type: string;
       };
 
@@ -176,7 +188,7 @@ export class TwoFactorService {
         return null;
       }
 
-      return { id: decoded.id, username: decoded.username };
+      return { id: decoded.id, username: decoded.username, tv: Number(decoded.tv || 0) };
     } catch {
       return null;
     }
@@ -194,6 +206,7 @@ export class TwoFactorService {
       id: number;
       username: string;
       email: string | null;
+      role: UserRole;
       domainExpiryDisplayMode: string;
       domainExpiryThresholdDays: number;
       showNonAuthoritativeDomains: boolean;
@@ -216,6 +229,9 @@ export class TwoFactorService {
         id: true,
         username: true,
         email: true,
+        role: true,
+        isActive: true,
+        tokenVersion: true,
         twoFactorSecret: true,
         twoFactorEnabled: true,
         domainExpiryDisplayMode: true,
@@ -230,8 +246,12 @@ export class TwoFactorService {
       },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new Error('用户不存在');
+    }
+
+    if (Number(user.tokenVersion) !== pending.tv) {
+      throw new Error('登录状态已变更，请重新登录');
     }
 
     if (!user.twoFactorEnabled || !user.twoFactorSecret) {
@@ -245,15 +265,7 @@ export class TwoFactorService {
       throw new Error('验证码错误');
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn as any }
-    );
+    const token = signUserToken(user);
 
     return {
       token,
@@ -261,6 +273,7 @@ export class TwoFactorService {
         id: user.id,
         username: user.username,
         email: user.email,
+        role: isUserRole(user.role) ? user.role : 'user',
         domainExpiryDisplayMode: user.domainExpiryDisplayMode,
         domainExpiryThresholdDays: user.domainExpiryThresholdDays,
         showNonAuthoritativeDomains: (user as any).showNonAuthoritativeDomains ?? false,

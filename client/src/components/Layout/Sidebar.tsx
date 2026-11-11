@@ -35,12 +35,14 @@ import {
   History as HistoryIcon,
   WorkspacePremium as CertificateIcon,
   Security as EdgeOneIcon,
+  Group as UsersIcon,
 } from '@mui/icons-material';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProvider } from '@/contexts/ProviderContext';
 import { ProviderType } from '@/types/dns';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { clearAuthData, getStoredUser } from '@/services/auth';
+import { UserRole } from '@/types';
 
 const PROVIDER_CONFIG: Record<ProviderType, { icon: React.ReactNode; color: string; name: string }> = {
   cloudflare: { icon: <CloudflareIcon />, color: '#f38020', name: 'Cloudflare' },
@@ -133,13 +135,16 @@ function reorderProviderOrder(order: ProviderType[], active: ProviderType, over:
 
 interface SidebarProps {
   onClose?: () => void;
+  userRole?: UserRole;
+  multiUserEnabled?: boolean;
 }
 
-export default function Sidebar({ onClose }: SidebarProps) {
+export default function Sidebar({ onClose, userRole, multiUserEnabled = true }: SidebarProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getStoredUser();
+  const storedUser = getStoredUser();
+  const user = { ...(storedUser || {}), role: userRole ?? storedUser?.role } as ReturnType<typeof getStoredUser>;
   const {
     providers,
     selectedProvider,
@@ -254,6 +259,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
     [providerOrder, sidebarProviders]
   );
   const isCertificatesRoute = location.pathname.startsWith('/certificates');
+  const isUsersRoute = location.pathname.startsWith('/users');
   const isDashboardRoute = location.pathname === '/';
 
   if (isLoading) {
@@ -467,6 +473,53 @@ export default function Sidebar({ onClose }: SidebarProps) {
                       
                             
                       
+                                        {user?.role === 'admin' && multiUserEnabled ? (
+                                          <Box sx={{ px: 2, mt: 0.5, mb: 0.5 }}>
+                                            <ListItemButton
+                                              onClick={() => {
+                                                selectProvider(null);
+                                                navigate('/users');
+                                                if (onClose) onClose();
+                                              }}
+                                              sx={{
+                                                py: 0.8,
+                                                px: 2,
+                                                borderRadius: '12px',
+                                                bgcolor: isUsersRoute ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                                color: isUsersRoute ? 'white' : 'rgba(255,255,255,0.7)',
+                                                '&:hover': {
+                                                  bgcolor: isUsersRoute ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                                                  color: 'white'
+                                                },
+                                                '&.Mui-focusVisible': { bgcolor: 'transparent' },
+                                                '&:active': { bgcolor: 'transparent' }
+                                              }}
+                                            >
+                                              <Box
+                                                sx={{
+                                                  width: 32,
+                                                  height: 32,
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  color: 'white',
+                                                  mr: 2,
+                                                }}
+                                              >
+                                                <UsersIcon fontSize="small" sx={{ fontSize: 20 }} />
+                                              </Box>
+                                              <ListItemText
+                                                primary="用户管理"
+                                                primaryTypographyProps={{
+                                                  variant: 'body2',
+                                                  fontWeight: 500,
+                                                  fontSize: '1rem'
+                                                }}
+                                              />
+                                            </ListItemButton>
+                                          </Box>
+                                        ) : null}
+
                                         {/* 供应商列表区域 */}
                       
                             
@@ -836,13 +889,13 @@ export default function Sidebar({ onClose }: SidebarProps) {
                                               
                       
                   <Typography variant="caption" color="rgba(255,255,255,0.5)" noWrap>
-                      
+                     
                                               
-                      
-                    管理员
-                      
+                     
+                    {user?.role === 'admin' ? '管理员' : '普通用户'}
+                     
                                               
-                      
+                     
                   </Typography>
                       
                                               

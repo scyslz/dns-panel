@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { isAuthenticated } from './services/auth';
+import { isAuthenticated, getStoredUser } from './services/auth';
 import { ProviderProvider } from './contexts/ProviderContext';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
@@ -12,6 +12,7 @@ import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Certificates from './pages/Certificates';
 import ApiDocs from './pages/ApiDocs';
+import Users from './pages/Users';
 
 import { BreadcrumbProvider } from './contexts/BreadcrumbContext';
 
@@ -27,6 +28,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       <BreadcrumbProvider>{children}</BreadcrumbProvider>
     </ProviderProvider>
   );
+}
+
+/** 子路由的管理员守卫：父级已提供 Provider 上下文，这里只做展示层收敛 */
+function AdminOnly({ children }: { children: React.ReactNode }) {
+  // 真正的权限校验在后端 /api/users 的 requireAdmin
+  // 本地缓存缺失 role（旧版本残留登录态）时一律按普通用户处理
+  if (getStoredUser()?.role !== 'admin') {
+    return <Navigate to="/?scope=all" replace />;
+  }
+  return <>{children}</>;
 }
 
 /**
@@ -55,6 +66,14 @@ function App() {
         <Route path="tunnels/:zoneId" element={<Tunnels />} />
         <Route path="logs" element={<Logs />} />
         <Route path="settings" element={<Settings />} />
+        <Route
+          path="users"
+          element={
+            <AdminOnly>
+              <Users />
+            </AdminOnly>
+          }
+        />
         <Route path="certificates" element={<Certificates />} />
         <Route path="docs" element={<ApiDocs />} />
       </Route>

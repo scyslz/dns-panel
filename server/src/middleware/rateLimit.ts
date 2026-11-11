@@ -16,6 +16,34 @@ export const loginLimiter = rateLimit({
 });
 
 /**
+ * 公开注册接口速率限制（默认关闭时也能防止空库探测 / 暴力尝试）
+ */
+export const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    message: '注册尝试次数过多，请稍后再试',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * 用户管理等敏感写操作速率限制
+ */
+export const sensitiveLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: '操作过于频繁，请稍后再试',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * DNS 操作速率限制
  */
 export const dnsLimiter = rateLimit({

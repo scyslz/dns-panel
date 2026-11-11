@@ -40,12 +40,13 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status, data } = error.response;
+      const message = String(data?.message || '');
 
       // 401 未授权 - 清除 Token 并跳转登录
       if (status === 401) {
-        const message = String(data?.message || '');
-        const authMessages = ['未提供认证令牌', '无效或过期的令牌', '认证失败'];
-        const shouldLogout = authMessages.some(m => message.includes(m));
+        // 未提供认证令牌 / 无效或过期的令牌 / 账号已被禁用 / 登录状态已失效
+        // 统一让前端重新登录；2FA 流程的提示不触发跳转
+        const shouldLogout = !message.includes('两步验证');
 
         if (shouldLogout) {
           localStorage.removeItem('token');

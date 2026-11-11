@@ -31,10 +31,13 @@ import {
 import {
   getCurrentUser,
   getStoredUser,
+  mergeStoredUser,
   updateDomainExpirySettings,
   updatePassword,
 } from '@/services/auth';
 import ApiKeyManagement from '@/components/Settings/ApiKeyManagement';
+import AccountSettingsCard from '@/components/Settings/AccountSettingsCard';
+import { SYSTEM_SETTINGS_CHANGED_EVENT } from '@/components/Layout/Layout';
 import CertificateSettingsCard from '@/components/Settings/CertificateSettingsCard';
 import DnsCredentialManagement from '@/components/Settings/DnsCredentialManagement';
 import NotificationChannelsCard from '@/components/Settings/NotificationChannelsCard';
@@ -51,6 +54,7 @@ const DOMAINS_PER_PAGE_STORAGE_KEY = 'dns_domains_per_page';
 const DOMAINS_PER_PAGE_CHANGED_EVENT = 'dns_domains_per_page_changed';
 
 export default function Settings() {
+  const isAdmin = getStoredUser()?.role === 'admin';
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
@@ -104,7 +108,7 @@ export default function Settings() {
         const user = res?.data?.user;
         if (!user) return;
 
-        localStorage.setItem('user', JSON.stringify(user));
+        mergeStoredUser(user);
 
         if (user.domainExpiryDisplayMode === 'days' || user.domainExpiryDisplayMode === 'date') {
           setExpiryDisplayMode(user.domainExpiryDisplayMode);
@@ -173,7 +177,7 @@ export default function Settings() {
 
       const user = res?.data?.user;
       if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
+        mergeStoredUser(user);
         setShowNonAuthoritativeDomains(!!user.showNonAuthoritativeDomains);
       }
       setExpirySettingsSuccess('设置已保存');
@@ -189,6 +193,7 @@ export default function Settings() {
       <Grid container spacing={3}>
         <Grid item xs={12} md={5} sx={{ order: { xs: 1, md: 1 }, minWidth: 0 }}>
           <Stack spacing={3}>
+            {isAdmin ? <AccountSettingsCard onChanged={() => window.dispatchEvent(new Event(SYSTEM_SETTINGS_CHANGED_EVENT))} /> : null}
             <Card sx={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: 'none' }}>
               <CardHeader
                 avatar={<SecurityIcon color="primary" />}

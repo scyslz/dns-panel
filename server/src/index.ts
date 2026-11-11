@@ -7,6 +7,8 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 // 导入路由
 import authRoutes from './routes/auth';
+import userRoutes from './routes/users';
+import systemSettingsRoutes from './routes/systemSettings';
 import hostnameRoutes from './routes/hostnames';
 import logRoutes from './routes/logs';
 // 新增：多提供商路由
@@ -29,6 +31,7 @@ import { startCertificateOrderScheduler } from './jobs/certificateOrderScheduler
 import { startCertificateRenewalScheduler } from './jobs/certificateRenewalScheduler';
 import { startVendorCertificateScheduler } from './jobs/vendorCertificateScheduler';
 import { startCertificateDeployScheduler } from './jobs/certificateDeployScheduler';
+import { ensureBootstrapAdmin } from './services/roles';
 
 // 验证配置
 validateConfig();
@@ -48,6 +51,8 @@ app.get('/health', (req, res) => {
 
 // API 路由
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);                     // 用户管理（仅管理员）
+app.use('/api/system-settings', systemSettingsRoutes); // 系统设置（仅管理员）
 app.use('/api/dns-credentials', dnsCredentialRoutes); // 新版多提供商凭证
 app.use('/api/dns-records', dnsRecordRoutes);        // 新版多提供商 DNS 路由
 app.use('/api/aliyun-esa', aliyunEsaRoutes);         // 阿里云 ESA 站点管理
@@ -86,7 +91,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // 启动服务器
-app.listen(config.port, () => {
+app.listen(config.port, async () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║   Cloudflare DNS Manager API Server                  ║
@@ -98,6 +103,13 @@ app.listen(config.port, () => {
 ║   服务器已启动: http://localhost:${config.port.toString().padEnd(18)}║
 ╚═══════════════════════════════════════════════════════╝
   `);
+
+  // 旧库升级：无 role 字段时把最早的账号提升为管理员，避免升级后无人可管理用户
+  try {
+    await ensureBootstrapAdmin();
+  } catch (error: any) {
+    console.error('[auth] 初始化管理员失败:', error?.message || error);
+  }
 
   startDomainExpiryScheduler();
   startCertificateOrderScheduler();

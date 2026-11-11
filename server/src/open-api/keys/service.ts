@@ -170,9 +170,9 @@ export async function authenticateApiKey(raw: string): Promise<{
 
   const user = await prisma.user.findUnique({
     where: { id: record.userId },
-    select: { id: true, username: true, email: true },
+    select: { id: true, username: true, email: true, isActive: true, role: true },
   });
-  if (!user) throw new ApiError('INVALID_API_KEY', 'API Key 所属用户不存在', 401);
+  if (!user || !user.isActive) throw new ApiError('INVALID_API_KEY', 'API Key 所属用户已禁用', 401);
 
   return {
     key: {

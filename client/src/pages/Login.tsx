@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -22,6 +22,7 @@ import {
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { login, verify2FA, saveAuthData } from '@/services/auth';
+import { getRegistrationStatus } from '@/services/users';
 
 interface LoginForm {
   username: string;
@@ -44,6 +45,13 @@ export default function Login() {
   
   const [requires2FA, setRequires2FA] = useState(false);
   const [tempToken, setTempToken] = useState('');
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  useEffect(() => {
+    getRegistrationStatus()
+      .then((res) => setRegistrationEnabled(res?.data?.enabled === true))
+      .catch(() => setRegistrationEnabled(false));
+  }, []);
 
   const {
     register,
@@ -255,20 +263,22 @@ export default function Login() {
                   </Button>
                 </Stack>
 
-                <Box sx={{ mt: 4, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    还没有账户？{' '}
-                    <Link 
-                      component={RouterLink} 
-                      to="/register" 
-                      underline="hover" 
-                      fontWeight="600"
-                      color="primary.main"
-                    >
-                      免费注册
-                    </Link>
-                  </Typography>
-                </Box>
+                {registrationEnabled ? (
+                  <Box sx={{ mt: 4, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      首次使用？{' '}
+                       <Link
+                        component={RouterLink}
+                        to="/register"
+                        underline="hover"
+                        fontWeight="600"
+                        color="primary.main"
+                      >
+                        注册账号
+                      </Link>
+                    </Typography>
+                  </Box>
+                ) : null}
               </form>
             </>
           ) : (

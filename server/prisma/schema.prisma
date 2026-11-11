@@ -13,6 +13,15 @@ model User {
   username                        String   @unique
   email                           String?  @unique
   password                        String
+  // 角色：admin = 管理员（可管理用户），user = 普通用户（仅管理自己的数据）
+  // 旧库通过 prisma db push 增加该字段，默认值为 user；启动时会确保至少存在一个 admin
+  role                            String   @default("user")
+  // 禁用后该用户的 JWT / API Key 立即失效（认证中间件每次请求查库）
+  isActive                        Boolean  @default(true)
+  // 待审核：公开注册且开启审核时置为 true，管理员通过后才可登录
+  pendingApproval                 Boolean  @default(false)
+  // 凭据版本号：改密 / 重置密码 / 角色变更 / 禁用时自增，使已签发的旧 JWT 立即失效
+  tokenVersion                    Int      @default(0)
   cfApiToken                      String?
   cfAccountId                     String?
   twoFactorSecret                 String?
@@ -336,6 +345,21 @@ model DomainExpiryOverride {
   @@unique([userId, domain])
   @@index([userId])
   @@map("domain_expiry_overrides")
+}
+
+/// 系统级设置（单行，id 固定为 1）。由管理员在设置页维护，避免改环境变量+重启。
+model SystemSettings {
+  id                       Int      @id @default(1)
+  // 是否启用多用户：关闭后隐藏用户管理、停止公开注册与用户管理写操作
+  multiUserEnabled         Boolean  @default(true)
+  // 是否开放公开注册；默认关闭（未配置即关闭）
+  registrationEnabled      Boolean  @default(false)
+  // 公开注册是否需要管理员审核；开启后新账号为待审核，审核通过前不能登录
+  registrationRequiresApproval Boolean @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("system_settings")
 }
 
 /// 开放 API 密钥（仅追加表，不影响现有业务表）

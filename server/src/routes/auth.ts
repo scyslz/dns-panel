@@ -3,38 +3,92 @@ import { AuthService } from '../services/auth';
 import { TwoFactorService } from '../services/twoFactor';
 import { LoggerService } from '../services/logger';
 import { successResponse, errorResponse } from '../utils/response';
-import { authenticateToken } from '../middleware/auth';
-import { loginLimiter } from '../middleware/rateLimit';
+import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { loginLimiter, registerLimiter, sensitiveLimiter } from '../middleware/rateLimit';
 import { getClientIp } from '../middleware/logger';
 import { AuthRequest } from '../types';
 import { CertificateSettingsService } from '../services/cert/CertificateSettingsService';
 import { CertificateNotificationService } from '../services/cert/CertificateNotificationService';
+import {
+  getPublicRegistrationStatus,
+  getSettingsRow,
+} from '../services/roles';
 
 const router = Router();
 
 /**
- * POST /api/auth/register
- * 用户注册
+ * GET /api/auth/system-status
+ * 所有登录用户可读的最小状态：仅用于前端决定是否显示「用户管理」入口。
+ * 不暴露注册策略细节。
  */
-router.post('/register', async (req, res) => {
+router.get('/system-status', async (_req, res) => {
   try {
-    const { username, email, password, cfApiToken, cfAccountId } = req.body;
+    const row = await getSettingsRow();
+    return successResponse(res, { multiUserEnabled: row.multiUserEnabled }, '获取系统状态成功');
+  } catch (error: any) {
+    return errorResponse(res, error.message, 400);
+  }
+});
+
+/**
+ * GET /api/auth/registration-status
+ * 登录/注册页用于决定是否展示注册入口、以及是否提示「需审核」。
+ * 不暴露用户数，只返回布尔值。
+ */
+router.get('/registration-status', async (_req, res) => {
+  try {
+    const status = await getPublicRegistrationStatus();
+    return successResponse(res, status, '获取注册状态成功');
+  } catch (error: any) {
+    return errorResponse(res, error.message, 400);
+  }
+});
+
+/**
+ * POST /api/auth/register
+ * 用户注册（默认关闭）
+ *
+ * 公开注册是否开放由「设置」中的开关决定（默认关闭）；
+ * 若开启「注册审核」，新账号需管理员审核后才能登录。
+ */
+router.post('/register', registerLimiter, async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
 
     if (!username || !password) {
       return errorResponse(res, '缺少必需参数', 400);
     }
 
+    // 公开注册是匿名入口，只接受账号基础字段；
+    // 不接受客户端传 role，也不接受 cfApiToken/cfAccountId 等第三方凭证写入。
     const user = await AuthService.register({
       username,
       email,
       password,
-      cfApiToken,
-      cfAccountId,
+      registrationMode: 'public',
     });
 
-    return successResponse(res, { user }, '注册成功', 201);
+    const pendingApproval = user.pendingApproval;
+    await LoggerService.createLog({
+      userId: user.id,
+      action: 'CREATE',
+      resourceType: 'USER',
+      recordName: user.username,
+      status: 'SUCCESS',
+      ipAddress: getClientIp(req),
+      newValue: JSON.stringify({ action: 'public_register', pendingApproval }),
+    });
+
+    return successResponse(
+      res,
+      { user, requiresApproval: pendingApproval },
+      user.pendingApproval ? '注册成功，请等待管理员审核' : '注册成功',
+      201
+    );
   } catch (error: any) {
-    return errorResponse(res, error.message, 400);
+    const message = error?.message || '注册失败';
+    const status = message.includes('公开注册已关闭') ? 403 : 400;
+    return errorResponse(res, message, status);
   }
 });
 

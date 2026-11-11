@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,11 @@ import {
 import Sidebar from './Sidebar';
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext';
 import { useProvider } from '@/contexts/ProviderContext';
+import { getCurrentUser, getStoredUser, mergeStoredUser } from '@/services/auth';
+import { getSystemStatus } from '@/services/users';
+import { UserRole } from '@/types';
+
+export const SYSTEM_SETTINGS_CHANGED_EVENT = 'dns-panel:system-settings-changed';
 
 const drawerWidth = 260;
 
@@ -25,6 +30,7 @@ const breadcrumbNameMap: Record<string, string> = {
   certificates: '证书中心',
   logs: '操作日志',
   settings: '设置',
+  users: '用户管理',
   docs: 'API 文档',
   tunnels: 'Tunnels',
 };
@@ -39,6 +45,33 @@ export default function Layout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole | undefined>(() => getStoredUser()?.role);
+  const [multiUserEnabled, setMultiUserEnabled] = useState(true);
+
+  // 旧版本登录态的本地缓存没有 role，进入面板后从服务端同步一次。
+  // 后端仍会在每个请求上校验角色，这里只用于正确显示/隐藏管理员入口。
+  useEffect(() => {
+    getCurrentUser()
+      .then((res) => {
+        const user = res?.data?.user;
+        if (!user) return;
+        mergeStoredUser(user);
+        setUserRole(user.role);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 多用户开关：关闭后侧边栏不展示「用户管理」入口
+  useEffect(() => {
+    const sync = () => {
+      getSystemStatus()
+        .then((res) => setMultiUserEnabled(res?.data?.multiUserEnabled !== false))
+        .catch(() => setMultiUserEnabled(true));
+    };
+    sync();
+    window.addEventListener(SYSTEM_SETTINGS_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(SYSTEM_SETTINGS_CHANGED_EVENT, sync);
+  }, []);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -46,7 +79,11 @@ export default function Layout() {
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1e293b' }}>
-      <Sidebar onClose={() => isMobile && setMobileOpen(false)} />
+      <Sidebar
+        onClose={() => isMobile && setMobileOpen(false)}
+        userRole={userRole}
+        multiUserEnabled={multiUserEnabled}
+      />
     </Box>
   );
 

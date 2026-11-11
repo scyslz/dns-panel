@@ -30,7 +30,7 @@ import {
   testCertificateSettingsChannel,
   updateCertificateSettings,
 } from '@/services/certificates';
-import { getCurrentUser, updateDomainExpirySettings } from '@/services/auth';
+import { getCurrentUser, mergeStoredUser, updateDomainExpirySettings } from '@/services/auth';
 import { User } from '@/types';
 import {
   CertificateNotificationChannelKey,
@@ -202,7 +202,7 @@ export default function NotificationChannelsCard() {
       setSettings(certificateResponse.data?.settings || createDefaultSettings());
       const user = userResponse.data?.user;
       if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
+        mergeStoredUser(user);
       }
       syncSmtpFromUser(user || null);
       setTelegramBotToken('');
@@ -319,7 +319,7 @@ export default function NotificationChannelsCard() {
       const userResponse = await updateDomainExpirySettings(smtpPayload);
       const user = userResponse.data?.user;
       if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
+        mergeStoredUser(user);
       }
       syncSmtpFromUser(user || null);
 

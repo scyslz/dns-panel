@@ -1,12 +1,56 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { config } from '../config';
 import { encrypt, decrypt } from '../utils/encryption';
+import { signUserToken } from '../utils/jwt';
 import { TwoFactorService } from './twoFactor';
+import { UserRole } from '../types';
+import {
+  canPubliclyRegister,
+  createManagedUser,
+  isUserRole,
+  shouldRequireApproval,
+} from './roles';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
+
+export function assertStrongPassword(password: string) {
+  if (typeof password !== 'string' || password.length < 8) {
+    throw new Error('密码长度至少为 8 位');
+  }
+  if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+    throw new Error('密码必须包含大小写字母和数字');
+  }
+}
+
+function validateUsername(username: string) {
+  const value = String(username || '').trim();
+  if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(value)) {
+    throw new Error('用户名需为 3-32 位字母、数字、_、. 或 -');
+  }
+  return value;
+}
+
+function validateEmail(email?: string | null) {
+  if (email === undefined || email === null || email === '') return null;
+  const value = String(email).trim();
+  if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw new Error('邮箱格式不正确');
+  }
+  return value;
+}
+
+async function assertUniqueUser(username: string, email: string | null, excludeId?: number) {
+  const orConditions: Array<{ username?: string; email?: string }> = [{ username }];
+  if (email) orConditions.push({ email });
+  const existing = await prisma.user.findFirst({
+    where: {
+      OR: orConditions,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+  });
+  if (existing) throw new Error('用户名或邮箱已存在');
+}
 
 interface LoginResult {
   requires2FA: boolean;
@@ -16,6 +60,7 @@ interface LoginResult {
     id: number;
     username: string;
     email: string | null;
+    role: UserRole;
     domainExpiryDisplayMode: string;
     domainExpiryThresholdDays: number;
     showNonAuthoritativeDomains: boolean;
@@ -33,7 +78,12 @@ interface LoginResult {
  */
 export class AuthService {
   /**
-   * 用户注册
+   * 用户注册（仅限空库初始化 / 管理员创建，公开注册策略由路由层控制）
+   *
+   * registrationMode:
+   *  - 'public'：空库且 ALLOW_PUBLIC_REGISTRATION=true 时，匿名创建首个管理员
+   *  - 'admin' ：已登录管理员创建用户，角色由 params.role 指定
+   * callerId 由已鉴权的路由传入，用于「谁创建了谁」的审计。
    */
   static async register(params: {
     username: string;
@@ -41,53 +91,47 @@ export class AuthService {
     password: string;
     cfApiToken?: string;
     cfAccountId?: string;
-  }) {
-    // 检查用户名是否已存在
-    const orConditions: Array<{ username?: string; email?: string }> = [{ username: params.username }];
-    if (params.email) {
-      orConditions.push({ email: params.email });
-    }
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: orConditions,
-      },
-    });
+    role?: UserRole;
+    registrationMode: 'public' | 'admin';
+  }, actor?: { id: number; username: string }) {
+    const username = validateUsername(params.username);
+    const email = validateEmail(params.email);
+    assertStrongPassword(params.password);
 
-    if (existingUser) {
-      throw new Error('用户名或邮箱已存在');
+    if (params.registrationMode === 'public' && !(await canPubliclyRegister())) {
+      throw new Error('公开注册已关闭，请联系管理员创建账号');
     }
-
-    // 密码强度验证
-    if (params.password.length < 8) {
-      throw new Error('密码长度至少为 8 位');
+    if (params.registrationMode === 'admin') {
+      if (!actor) throw new Error('未授权');
+      if (params.role && !isUserRole(params.role)) throw new Error('角色无效');
     }
+    // 公开注册且开启审核时，新账号进入待审核（空库首个管理员除外）
+    const pendingApproval = params.registrationMode === 'public'
+      ? await shouldRequireApproval()
+      : false;
 
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(params.password)) {
-      throw new Error('密码必须包含大小写字母和数字');
-    }
+    await assertUniqueUser(username, email);
 
-    // 加密密码和 API Token
     const hashedPassword = await bcrypt.hash(params.password, SALT_ROUNDS);
     const encryptedToken = params.cfApiToken ? encrypt(params.cfApiToken) : undefined;
 
-    // 创建用户
-    const user = await prisma.user.create({
-      data: {
-        username: params.username,
-        ...(params.email ? { email: params.email } : {}),
-        password: hashedPassword,
-        ...(encryptedToken ? { cfApiToken: encryptedToken } : {}),
-        ...(params.cfAccountId ? { cfAccountId: params.cfAccountId } : {}),
-      } as any,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        createdAt: true,
-      },
-    });
-
-    return user;
+    try {
+      return await createManagedUser({
+        username,
+        email,
+        passwordHash: hashedPassword,
+        role: params.registrationMode === 'admin' ? params.role : undefined,
+        pendingApproval,
+        cfApiToken: encryptedToken,
+        cfAccountId: params.cfAccountId,
+      });
+    } catch (error: any) {
+      // 并发下唯一索引冲突，转成可读提示
+      if (String(error?.code || '').includes('P2002')) {
+        throw new Error('用户名或邮箱已存在');
+      }
+      throw error;
+    }
   }
 
   /**
@@ -97,12 +141,17 @@ export class AuthService {
     // 查找用户（支持用户名或邮箱登录）
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ username: params.username }, { email: params.username }],
+        OR: [{ username: params.username }, ...(params.username ? [{ email: params.username }] : [])],
       },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new Error('用户名或密码错误');
+    }
+
+    // 开启注册审核后，公开注册的新账号必须经管理员审核才能登录
+    if (user.pendingApproval) {
+      throw new Error('账号待管理员审核，通过后方可登录');
     }
 
     // 验证密码
@@ -114,7 +163,7 @@ export class AuthService {
 
     // 如果用户启用了 2FA，返回临时 token
     if (user.twoFactorEnabled) {
-      const tempToken = TwoFactorService.generateTempToken(user.id, user.username);
+      const tempToken = TwoFactorService.generateTempToken(user);
       return {
         requires2FA: true,
         tempToken,
@@ -122,15 +171,7 @@ export class AuthService {
     }
 
     // 未启用 2FA，直接生成 JWT Token
-    const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn as any }
-    );
+    const token = signUserToken(user);
 
     return {
       requires2FA: false,
@@ -139,6 +180,7 @@ export class AuthService {
         id: user.id,
         username: user.username,
         email: user.email,
+        role: isUserRole(user.role) ? user.role : 'user',
         domainExpiryDisplayMode: user.domainExpiryDisplayMode,
         domainExpiryThresholdDays: user.domainExpiryThresholdDays,
         showNonAuthoritativeDomains: (user as any).showNonAuthoritativeDomains ?? false,
@@ -162,6 +204,8 @@ export class AuthService {
         id: true,
         username: true,
         email: true,
+        role: true,
+        isActive: true,
         cfAccountId: true,
         twoFactorEnabled: true,
         domainExpiryDisplayMode: true,
@@ -185,6 +229,7 @@ export class AuthService {
     const { smtpPass, ...safe } = user as any;
     return {
       ...safe,
+      role: isUserRole(safe.role) ? safe.role : 'user',
       smtpPassConfigured: !!smtpPass,
     };
   }
@@ -337,6 +382,8 @@ export class AuthService {
         id: true,
         username: true,
         email: true,
+        role: true,
+        isActive: true,
         domainExpiryDisplayMode: true,
         domainExpiryThresholdDays: true,
         showNonAuthoritativeDomains: true,
@@ -352,6 +399,7 @@ export class AuthService {
     const { smtpPass, ...safe } = user as any;
     return {
       ...safe,
+      role: isUserRole(safe.role) ? safe.role : 'user',
       smtpPassConfigured: !!smtpPass,
     };
   }
@@ -392,20 +440,17 @@ export class AuthService {
     }
 
     // 密码强度验证
-    if (newPassword.length < 8) {
-      throw new Error('密码长度至少为 8 位');
-    }
+    assertStrongPassword(newPassword);
 
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
-      throw new Error('密码必须包含大小写字母和数字');
-    }
-
-    // 加密新密码
+    // 加密新密码，同时递增凭据版本让所有旧 token 立即失效
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        tokenVersion: { increment: 1 },
+      },
     });
   }
 

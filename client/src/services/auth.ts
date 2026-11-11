@@ -8,7 +8,7 @@ export const register = async (params: {
   username: string;
   email?: string;
   password: string;
-}): Promise<ApiResponse<{ user: User }>> => {
+}): Promise<ApiResponse<{ user: User; requiresApproval?: boolean }>> => {
   return api.post('/auth/register', params);
 };
 
@@ -107,6 +107,17 @@ export const saveAuthData = (token: string, user: User) => {
 };
 
 /**
+ * 用接口返回的部分用户信息更新本地缓存。
+ *
+ * 部分接口（如域名到期设置）只返回部分字段，直接覆盖会丢失 role 等登录态字段，
+ * 导致管理员菜单消失。这里做浅合并，并用服务端返回值优先。
+ */
+export const mergeStoredUser = (patch: Partial<User>) => {
+  const current = getStoredUser();
+  localStorage.setItem('user', JSON.stringify({ ...(current || {}), ...patch }));
+};
+
+/**
  * 清除登录信息
  */
 export const clearAuthData = () => {
@@ -119,7 +130,15 @@ export const clearAuthData = () => {
  */
 export const getStoredUser = (): User | null => {
   const userStr = localStorage.getItem('user');
-  return userStr ? JSON.parse(userStr) : null;
+  if (!userStr) return null;
+  try {
+    const parsed = JSON.parse(userStr);
+    return parsed && typeof parsed === 'object' ? parsed as User : null;
+  } catch {
+    // 缓存损坏时不让登录页/路由守卫崩溃
+    localStorage.removeItem('user');
+    return null;
+  }
 };
 
 /**

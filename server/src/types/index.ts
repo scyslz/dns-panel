@@ -1,10 +1,13 @@
 import { Request } from 'express';
 
+export type UserRole = 'admin' | 'user';
+
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     username: string;
-    email: string;
+    email: string | null;
+    role: UserRole;
   };
 }
 
